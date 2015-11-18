@@ -1,0 +1,231 @@
+#!/usr/bin/python
+
+import os
+import sys
+import subprocess
+import json
+import csv
+import math
+import numpy as np
+import h5py
+import scipy.ndimage as nd
+from scipy.ndimage import gaussian_filter
+
+dark_fish_percentile = 2
+fish_blur_sigmas = 1
+centroid_median_span = 2
+
+light_toggle_threshold = 20
+abs_tail_delta_threshold = 20
+abs_tail_offset_threshold = 30
+
+avg_position_bounds = (0.3, 0.75)
+
+num_position_bins = 5
+
+def Gsigma(sigma):
+    """Pickle a gaussian function G(x) for given sigma"""
+    def G(x):
+        return (math.e ** (-(x**2)/(2*sigma**2)))/(2 * math.pi* sigma**2)**0.5
+    return G
+
+def process_frame(img, img_add=None, debug_frame_sink=None):
+    """Process frame image, returning (brightness, tail_position) pair.
+
+       img is RGB packed array with shape (H, W, 3) assumed to be
+       grayscale data and MAY be destructively mutated by this
+       processing.
+
+       img_add is array with same shape as image to add into frame
+       in order to adjust data prior to measurement. If None, 
+       this addition is skipped.
+
+       debug_frame_sink must be a function accepting the same array
+       input which will be modified to display debug information. A
+       value of None (default) will skip production of debug data.
+
+    """
+    img_rgb = img
+    img = img_rgb[:,:,0].astype('float32')
+    H, W = img.shape
+
+    img_brightness = int(np.sum(img) / ( W * H ))
+
+    if img_add is not None:
+        img += img_add
+
+    # smooth the image for better continuity of segmentation
+    img = gaussian_filter(img, fish_blur_sigmas)
+
+    # find the dark pixels in each column
+    x_percentiles = np.percentile(img, dark_fish_percentile, axis=0)
+    mask = img < x_percentiles
+
+    # find the "heights" i.e. centers of mass in Y axis of dark pixels
+    x_heights = (np.sum((mask * np.array(range(img.shape[0]))[:,None]), axis=0) / np.sum(mask, axis=0)).astype(np.uint16)
+
+    tail_slc = slice( int(W*avg_position_bounds[0]), int(W*avg_position_bounds[1]) )
+    tail_position = np.sum( x_heights[tail_slc] ).astype(np.uint16) / (tail_slc.stop - tail_slc.start)
+
+    position_bins = []
+    for b in range(num_position_bins):
+        bin_slc = slice( int(W*b/num_position_bins), int(W*(b+1)/num_position_bins) )
+        position_bins.append( np.sum( x_heights[bin_slc] ).astype(np.uint16) / (bin_slc.stop - bin_slc.start) )
+    
+    # illustrate the analysis decisions in an output movie frame
+    if debug_frame_sink is not None:
+        img_rgb[:,:,0] = img
+        img_rgb[:,:,2] = mask * 255
+        for x in range(img.shape[1]):
+            img_rgb[x_heights[x], x, 0] = 255
+        debug_frame_sink(img_rgb)
+    
+    return img_brightness, tail_position, position_bins, x_heights
+
+def main(moviename):
+
+    # this produces a JSON metadata document about the movie on standard output
+    probecmd = [
+        'ffprobe',
+        '-i', moviename,
+        '-show_streams',
+        '-of', 'json'
+    ]
+
+    # go ahead and get the movie metadata
+    probe_pipe = subprocess.Popen(probecmd, stdout = subprocess.PIPE, bufsize=1024**2)
+    probe_pipe.wait()
+    doc = probe_pipe.stdout.read()
+    del probe_pipe
+
+    meta = json.loads(doc)
+    del doc
+
+    assert len(meta['streams']) == 1
+    
+    meta = meta['streams'][0]
+    shape =  meta['height'], meta['width']
+    nbframes = int(meta['nb_frames'])
+
+    frame_nbytes = shape[0] * shape[1] * 3
+    
+    # this generates a stream of raw video pixels to standard output
+    readcmd = [
+        'ffmpeg',
+        '-i', moviename,
+        '-f', 'image2pipe', '-pix_fmt', 'rgb24',
+        '-vcodec', 'rawvideo', '-'
+    ]
+
+    # this accepts a stream of raw video pixels on standard input
+    writecmd = [
+        'ffmpeg',
+        '-y', # clobber
+        '-f', 'rawvideo',
+        '-s', '%dx%d' % (shape[1], shape[0]),
+        '-pix_fmt', 'rgb24',
+        '-r', meta['r_frame_rate'],
+        '-i', '-',
+        '-an',
+        '-pix_fmt', 'yuv420p',
+        'movie_debug.m4v'
+    ]
+
+    # setup the analysis output streams
+    csvwriter1 = csv.writer(open('movie_events.csv', 'w'))
+    csvwriter1.writerow( ('frameno','avg. brightness','avg. tailpos','avg. brightness delta','avg. tailpos delta','comment') )
+
+    csvwriter2 = csv.writer(open('movie_frame_measures.csv', 'w'))
+    csvwriter2.writerow( ('frameno','avg. brightness') + tuple([ 'position bin %d' % b for b in range(num_position_bins) ]) )
+
+    if os.getenv('FISHSPY_HDF5', 'false').lower() == 'true':
+        h5file = h5py.File('movie_frame_measures.hdf5', 'w')
+        h5file.attrs['src_movie'] = moviename
+        h5file.attrs['X'] = shape[1]
+        h5file.attrs['Y'] = shape[0]
+        h5file.attrs['nframes'] = nbframes
+        h5d_brightness = h5file.create_dataset('brightness', (nbframes,), dtype=np.uint8, chunks=(min(nbframes,1000),), compression='gzip')
+        h5d_x_heights = h5file.create_dataset('positions', (nbframes, shape[1]), dtype=np.uint16, chunks=(min(nbframes,1024), shape[1]), compression='gzip')
+    else:
+        h5file = None
+        
+    # setup the image buffer we'll use for each frame
+    in_img = np.zeros(shape + (3,), dtype='uint8')
+    in_buffer = np.getbuffer(in_img)
+
+    # start the input movie decoder
+    in_pipe = subprocess.Popen(readcmd, stdout=subprocess.PIPE)
+
+    # HACK: prepare map to brighten the top and bottom of the images to reduce vignetting?
+    G = Gsigma(shape[0])
+    norm = G(0)
+    brighten = (1.0 - np.array([ G(y-shape[0]/2) / norm for y in range(shape[0]) ], dtype='float32')[:,None]) * 64
+
+    # conditionally start debug movie output encoder
+    if os.getenv('DEBUG_MOVIE', 'false').lower() == 'true':
+        sink = lambda f: out_pipe.stdin.write(f.tostring())
+        out_pipe = subprocess.Popen(writecmd, stdin=subprocess.PIPE, bufsize=frame_nbytes*2)
+    else:
+        sink = None
+        out_pipe = None
+    
+    t = 0
+
+    prev_frame = None
+    idle_tail_positions = []
+    idle_tail_position = None
+    note = ''
+
+    # process every input frame
+    while t < nbframes:
+        # get raw pixels from input decoder and stuff into image buffer
+        in_pipe.stdout.readinto(in_buffer)
+
+        brightness, avg_position, position_bins, x_heights = process_frame(in_img, img_add=brighten, debug_frame_sink=sink)
+        if h5file is not None:
+            h5d_brightness[t] = brightness
+            h5d_x_heights[t,:] = x_heights
+        
+        # build up a baseline idle tail position
+        if t < 100:
+            idle_tail_positions.append(avg_position)
+        elif t == 100:
+            idle_tail_position = sum(idle_tail_positions) / 100
+        
+        # simple frame-to-frame thresholds to classify image conditions
+        if prev_frame:
+            note = []
+            if brightness - prev_frame[1] > light_toggle_threshold:
+                note.append('light turns on')
+            elif prev_frame[1] - brightness > light_toggle_threshold:
+                note.append('light turns off')
+            if (abs(avg_position - prev_frame[2]) > abs_tail_delta_threshold):
+                note.append('tail fast')
+            elif (t >= 100 and abs(avg_position - idle_tail_position) > abs_tail_offset_threshold):
+                note.append('tail bent')
+            note = ','.join(note)
+
+        # conditionally log the frame results only if an interesting condition is noted
+        if note:
+            csvwriter1.writerow((t, brightness, avg_position, brightness - prev_frame[1], avg_position - prev_frame[2], note))
+
+        csvwriter2.writerow( (t, brightness) + tuple(position_bins) )
+            
+        prev_frame = (t, brightness, avg_position, note)
+        t += 1
+
+    if out_pipe:
+        out_pipe.stdin.close()
+
+    in_pipe.wait()
+        
+    if out_pipe:
+        out_pipe.wait()
+
+    if h5file is not None:
+        h5file.close()
+    
+if __name__ == '__main__':
+    moviename = sys.argv[1]
+    exit(main(moviename))
+
