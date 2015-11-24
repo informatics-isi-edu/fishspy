@@ -166,7 +166,11 @@ def main(moviename):
     prev_frame = None
     idle_tail_positions = []
     idle_tail_position = None
+    starting_brightness_levels = []
+    starting_brightness_level = None
     note = ''
+    light_on = False
+    light_on_cnt = 0
 
     def debug_movie_sink(f):
         out_pipe.stdin.write(f.tobytes())
@@ -196,21 +200,37 @@ def main(moviename):
         # build up a baseline idle tail position
         if t < 100:
             idle_tail_positions.append(avg_position)
+            starting_brightness_levels.append(brightness)
         elif t == 100:
             idle_tail_position = sum(idle_tail_positions) / 100
+            starting_brightness_level = sum(starting_brightness_levels) / 100
         
-        # simple frame-to-frame thresholds to classify image conditions
+        note = []
+        if t >= 100:
+            # comparisons to baseline
+            if abs(avg_position - idle_tail_position) > abs_tail_offset_threshold:
+                note.append('tail bent')
+            if (brightness - starting_brightness_level) > (0.5 * light_toggle_threshold) and not light_on:
+                light_on_cnt += 1
+                note.append('light turns on %d' % light_on_cnt)
+                light_on = True
+            elif (brightness - starting_brightness_level) < (0.5 * light_toggle_threshold) and light_on:
+                note.append('light turns off %d' % light_on_cnt)
+                light_on = False
+                
         if prev_frame:
-            note = []
-            if brightness - prev_frame[1] > light_toggle_threshold:
-                note.append('light turns on')
-            elif prev_frame[1] - brightness > light_toggle_threshold:
-                note.append('light turns off')
+            # comparisons to previous frame
+            if brightness - prev_frame[1] > light_toggle_threshold and not light_on:
+                light_on_cnt += 1
+                note.append('light turns on %d' % light_on_cnt)
+                light_on = True
+            elif prev_frame[1] - brightness > light_toggle_threshold and light_on:
+                note.append('light turns off %d' % light_on_cnt)
+                light_on = False
             if (abs(avg_position - prev_frame[2]) > abs_tail_delta_threshold):
                 note.append('tail fast')
-            elif (t >= 100 and abs(avg_position - idle_tail_position) > abs_tail_offset_threshold):
-                note.append('tail bent')
-            note = ','.join(note)
+
+        note = ','.join(note)
 
         # conditionally log the frame results only if an interesting condition is noted
         if note:
