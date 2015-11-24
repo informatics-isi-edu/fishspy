@@ -161,14 +161,6 @@ def main(moviename):
     norm = G(0)
     brighten = (1.0 - np.array([ G(y-shape[0]/2) / norm for y in range(shape[0]) ], dtype='float32')[:,None]) * 64
 
-    # conditionally start debug movie output encoder
-    if os.getenv('DEBUG_MOVIE', 'false').lower() == 'true':
-        sink = lambda f: out_pipe.stdin.write(f.tostring())
-        out_pipe = subprocess.Popen(writecmd, stdin=subprocess.PIPE, bufsize=frame_nbytes*2)
-    else:
-        sink = None
-        out_pipe = None
-    
     t = 0
 
     prev_frame = None
@@ -176,12 +168,27 @@ def main(moviename):
     idle_tail_position = None
     note = ''
 
+    def debug_movie_sink(f):
+        out_pipe.stdin.write(f.tobytes())
+    
+    # conditionally start debug movie output encoder
+    if os.getenv('DEBUG_MOVIE', 'false').lower() == 'true':
+        sink = debug_movie_sink
+        out_pipe = subprocess.Popen(writecmd, stdin=subprocess.PIPE, bufsize=frame_nbytes*24)
+    else:
+        sink = None
+        out_pipe = None
+    
     # process every input frame
     while t < nbframes:
         # get raw pixels from input decoder and stuff into image buffer
         in_pipe.stdout.readinto(in_buffer)
 
-        brightness, avg_position, position_bins, x_heights = process_frame(in_img, img_add=brighten, debug_frame_sink=sink)
+        brightness, avg_position, position_bins, x_heights = process_frame(
+            in_img,
+            img_add=brighten,
+            debug_frame_sink=sink
+        )
         if h5file is not None:
             h5d_brightness[t] = brightness
             h5d_x_heights[t,:] = x_heights
