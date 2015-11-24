@@ -62,7 +62,7 @@ def process_frame(img, img_add=None, debug_frame_sink=None):
     mask = img < x_percentiles
 
     # find the "heights" i.e. centers of mass in Y axis of dark pixels
-    x_heights = (np.sum((mask * np.array(range(img.shape[0]))[:,None]), axis=0) / np.sum(mask, axis=0)).astype(np.uint16)
+    x_heights = (np.sum((mask * np.array(range(img.shape[0]))[:,None]), axis=0) / np.sum(mask, axis=0))
 
     tail_slc = slice( int(W*avg_position_bounds[0]), int(W*avg_position_bounds[1]) )
     tail_position = np.sum( x_heights[tail_slc] ).astype(np.uint16) / (tail_slc.stop - tail_slc.start)
@@ -154,7 +154,7 @@ def main(moviename):
     in_buffer = np.getbuffer(in_img)
 
     # start the input movie decoder
-    in_pipe = subprocess.Popen(readcmd, stdout=subprocess.PIPE)
+    in_pipe = subprocess.Popen(readcmd, stdout=subprocess.PIPE, bufsize=frame_nbytes*24)
 
     # HACK: prepare map to brighten the top and bottom of the images to reduce vignetting?
     G = Gsigma(shape[0])
