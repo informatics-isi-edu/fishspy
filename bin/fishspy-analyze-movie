@@ -55,7 +55,7 @@ def process_frame(img, img_add=None, debug_frame_sink=None):
         img += img_add
 
     # smooth the image for better continuity of segmentation
-    img = gaussian_filter(img, fish_blur_sigmas)
+    #img = gaussian_filter(img, fish_blur_sigmas)
 
     # find the dark pixels in each column
     x_percentiles = np.percentile(img, dark_fish_percentile, axis=0)
