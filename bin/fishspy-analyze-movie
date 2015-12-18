@@ -65,7 +65,7 @@ def process_frame(img, img_add=None, debug_frame_sink=None):
     x_heights = (np.sum((mask * np.array(range(img.shape[0]))[:,None]), axis=0) / np.sum(mask, axis=0))
 
     tail_slc = slice( int(W*avg_position_bounds[0]), int(W*avg_position_bounds[1]) )
-    tail_position = np.sum( x_heights[tail_slc] ).astype(np.uint16) / (tail_slc.stop - tail_slc.start)
+    tail_position = int(np.sum( x_heights[tail_slc] ) / (tail_slc.stop - tail_slc.start))
 
     position_bins = []
     for b in range(num_position_bins):
