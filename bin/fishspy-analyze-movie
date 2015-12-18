@@ -10,6 +10,8 @@ import numpy as np
 import h5py
 import scipy.ndimage as nd
 from scipy.ndimage import gaussian_filter
+from scipy.misc import toimage
+from PIL import Image, ImageDraw, ImageFont
 
 dark_fish_percentile = 3
 fish_blur_sigmas = 1
@@ -184,8 +186,38 @@ def main(moviename):
     light_on_t = 0
     light_on_dur = None
 
+    font = ImageFont.truetype('FreeSans.ttf', 24)
+
     def debug_movie_sink(f):
-        out_pipe.stdin.write(f.tobytes())
+        #out_pipe.stdin.write(f.tobytes())
+        if brightness is not None:
+            #f[avg_position,:,0] = 255
+            #f[avg_position,:,1] = 0
+            #f[avg_position,:,2] = 255
+            img = toimage(f)
+            draw = ImageDraw.Draw(img)
+            draw.text((0, 0), "Bright: %.3d" % brightness, (255,255,255), font=font)
+            draw.text((0, 25), "Position: %.3d" % avg_position, (255,255,255), font=font)
+            light_color = (0, 255, 0)
+            if light_on_t > 0:
+                light_t = (t - light_on_t)
+                if light_on_dur is not None and (light_t > (light_on_dur/2)):
+                    light_color = (255, 0, 0)
+                light_t = '%.3d' % light_t
+            else:
+                light_t = ''
+                light_color = (128, 128, 128)
+            draw.text(
+                (0, 50),
+                #"Light %s event %d %s" % (light_on and 'ON' or 'off', light_on_cnt, light_t),
+                "Light %s event %d" % (light_on and 'ON' or 'off', light_on_cnt),
+                light_color,
+                font=font
+            )
+            draw.text((0, 75), note, (255,255,255), font=font)
+        else:
+            img = toimage(f)
+        out_pipe.stdin.write(img.tobytes())
     
     # conditionally start debug movie output encoder
     if os.getenv('DEBUG_MOVIE', 'false').lower() == 'true':
