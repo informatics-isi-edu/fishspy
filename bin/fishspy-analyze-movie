@@ -175,19 +175,23 @@ def main(moviename):
     idle_tail_position = None
     starting_brightness_levels = []
     starting_brightness_level = None
+    brightness = None
+    avg_position = None
+    position_bins = None
     note = ''
     light_on = False
     light_on_cnt = 0
+    light_on_t = 0
+    light_on_dur = None
 
     def debug_movie_sink(f):
         out_pipe.stdin.write(f.tobytes())
     
     # conditionally start debug movie output encoder
     if os.getenv('DEBUG_MOVIE', 'false').lower() == 'true':
-        sink = debug_movie_sink
         out_pipe = subprocess.Popen(writecmd, stdin=subprocess.PIPE, bufsize=frame_nbytes*24)
+        sink = debug_movie_sink
     else:
-        sink = None
         out_pipe = None
         sink = None
 
@@ -225,21 +229,27 @@ def main(moviename):
                 note.append('tail bent')
             if (brightness - starting_brightness_level) > (0.5 * light_toggle_threshold) and not light_on:
                 light_on_cnt += 1
+                light_on_t = t
                 note.append('light turns on %d' % light_on_cnt)
                 light_on = True
             elif (brightness - starting_brightness_level) < (0.5 * light_toggle_threshold) and light_on:
                 note.append('light turns off %d' % light_on_cnt)
                 light_on = False
+                light_on_dur = t - light_on_t
+                light_on_t = 0
                 
         if prev_frame:
             # comparisons to previous frame
             if brightness - prev_frame[1] > light_toggle_threshold and not light_on:
                 light_on_cnt += 1
+                light_on_t = t
                 note.append('light turns on %d' % light_on_cnt)
                 light_on = True
             elif prev_frame[1] - brightness > light_toggle_threshold and light_on:
                 note.append('light turns off %d' % light_on_cnt)
                 light_on = False
+                light_on_dur = t - light_on_t
+                light_on_t = 0
             if (abs(avg_position - prev_frame[2]) > abs_tail_delta_threshold):
                 note.append('tail fast')
 
