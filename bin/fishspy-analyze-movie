@@ -132,7 +132,9 @@ def main(moviename):
         '-r', meta['r_frame_rate'],
         '-i', '-',
         '-an',
+        '-vcodec', 'libx264',
         '-pix_fmt', 'yuv420p',
+        '-x264opts', 'crf=31:bframes=5',
         'movie_debug.m4v'
     ]
 
