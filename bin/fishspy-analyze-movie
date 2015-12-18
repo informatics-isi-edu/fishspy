@@ -29,7 +29,7 @@ def Gsigma(sigma):
         return (math.e ** (-(x**2)/(2*sigma**2)))/(2 * math.pi* sigma**2)**0.5
     return G
 
-def process_frame(img, img_add=None, debug_frame_sink=None):
+def process_frame(img, img_add=None, debug_frame_sink=None, tmp_img1=None, tmp_img2=None):
     """Process frame image, returning (brightness, tail_position) pair.
 
        img is RGB packed array with shape (H, W, 3) assumed to be
@@ -46,16 +46,19 @@ def process_frame(img, img_add=None, debug_frame_sink=None):
 
     """
     img_rgb = img
-    img = img_rgb[:,:,0].astype('float32')
+    img = tmp_img1
+    img[:,:] = img_rgb[:,:,0]#.astype('float32')
     H, W = img.shape
 
     img_brightness = int(np.sum(img) / ( W * H ))
 
     if img_add is not None:
-        img += img_add
+        np.add(img, img_add, tmp_img2)
+        np.clip(tmp_img2, 0, 255, out=img)
 
     # smooth the image for better continuity of segmentation
-    #img = gaussian_filter(img, fish_blur_sigmas)
+    #gaussian_filter(img, fish_blur_sigmas, output=tmp_img2)
+    #img = tmp_img2
 
     # find the dark pixels in each column
     x_percentiles = np.percentile(img, dark_fish_percentile, axis=0)
@@ -74,9 +77,11 @@ def process_frame(img, img_add=None, debug_frame_sink=None):
     
     # illustrate the analysis decisions in an output movie frame
     if debug_frame_sink is not None:
-        img_rgb[:,:,0] = img
-        img_rgb[:,:,2] = mask * 255
-        for x in range(img.shape[1]):
+        for i in range(3):
+            img_rgb[:,:,i] = img
+        img_rgb[:,:,2] *= (1 - mask)
+        img_rgb[:,:,2] += mask * 255
+        for x in range(int(W*avg_position_bounds[0]), int(W*avg_position_bounds[1])):
             img_rgb[x_heights[x], x, 0] = 255
         debug_frame_sink(img_rgb)
     
@@ -182,7 +187,11 @@ def main(moviename):
     else:
         sink = None
         out_pipe = None
-    
+        sink = None
+
+    tmp_img1 = np.zeros(shape, dtype=np.float32)
+    tmp_img2 = np.zeros(shape, dtype=np.float32)
+        
     # process every input frame
     while t < nbframes:
         # get raw pixels from input decoder and stuff into image buffer
@@ -191,12 +200,14 @@ def main(moviename):
         brightness, avg_position, position_bins, x_heights = process_frame(
             in_img,
             img_add=brighten,
-            debug_frame_sink=sink
+            debug_frame_sink=sink,
+            tmp_img1=tmp_img1,
+            tmp_img2=tmp_img2
         )
         if h5file is not None:
             h5d_brightness[t] = brightness
             h5d_x_heights[t,:] = x_heights
-        
+
         # build up a baseline idle tail position
         if t < 100:
             idle_tail_positions.append(avg_position)
