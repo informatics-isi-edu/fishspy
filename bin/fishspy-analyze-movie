@@ -28,7 +28,7 @@ num_position_bins = 5
 def Gsigma(sigma):
     """Pickle a gaussian function G(x) for given sigma"""
     def G(x):
-        return (math.e ** (-(x**2)/(2*sigma**2)))/(2 * math.pi* sigma**2)**0.5
+        return (math.e ** (-(x**2.0)/(2.0*sigma**2.0)))/(2.0 * math.pi* sigma**2.0)**0.5
     return G
 
 def process_frame(img, img_add=None, debug_frame_sink=None, tmp_img1=None, tmp_img2=None):
