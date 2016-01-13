@@ -166,9 +166,9 @@ def main(moviename):
     in_pipe = subprocess.Popen(readcmd, stdout=subprocess.PIPE, bufsize=frame_nbytes*24)
 
     # HACK: prepare map to brighten the top and bottom of the images to reduce vignetting?
-    G = Gsigma(shape[0])
+    G = Gsigma(shape[0] / 6)
     norm = G(0)
-    brighten = (1.0 - np.array([ G(y-shape[0]/2) / norm for y in range(shape[0]) ], dtype='float32')[:,None]) * 64
+    brighten = (1.0 - np.array([ G(y-shape[0]/2) / norm for y in range(shape[0]) ], dtype='float32')[:,None]) * 60
 
     t = 0
 
