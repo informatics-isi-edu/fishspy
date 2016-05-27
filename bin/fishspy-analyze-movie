@@ -9,7 +9,7 @@ import math
 import numpy as np
 import h5py
 import scipy.ndimage as nd
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, maximum_filter1d, minimum_filter1d
 from scipy.misc import toimage
 from PIL import Image, ImageDraw, ImageFont
 
@@ -21,26 +21,22 @@ light_toggle_threshold = 20
 abs_tail_delta_threshold = 20
 abs_tail_offset_threshold = 30
 
-avg_position_bounds = (0.4, 0.70)
+avg_position_bounds = (0.4, 0.85)
 
 num_position_bins = 5
 
-def Gsigma(sigma):
-    """Pickle a gaussian function G(x) for given sigma"""
-    def G(x):
-        return (math.e ** (-(x**2.0)/(2.0*sigma**2.0)))/(2.0 * math.pi* sigma**2.0)**0.5
-    return G
-
-def process_frame(img, img_add=None, debug_frame_sink=None, tmp_img1=None, tmp_img2=None):
+def process_frame(img, tmp_img1, tmp_img2, tmp_img3, debug_frame_sink=None):
     """Process frame image, returning (brightness, tail_position) pair.
 
        img is RGB packed array with shape (H, W, 3) assumed to be
        grayscale data and MAY be destructively mutated by this
        processing.
 
-       img_add is array with same shape as image to add into frame
-       in order to adjust data prior to measurement. If None, 
-       this addition is skipped.
+       tmp_img1 and tmp_img2 are arrays of uint8 type and (H, W)
+       shape used for intermediate calculations.
+
+       tmp_imt3 is array of bool type and (H, W) shape used for
+       intermediate calculations.
 
        debug_frame_sink must be a function accepting the same array
        input which will be modified to display debug information. A
@@ -48,26 +44,23 @@ def process_frame(img, img_add=None, debug_frame_sink=None, tmp_img1=None, tmp_i
 
     """
     img_rgb = img
-    img = tmp_img1
-    img[:,:] = img_rgb[:,:,0]#.astype('float32')
-    H, W = img.shape
+    img_g = img_rgb[:,:,0]
+    H, W = img_g.shape
 
-    img_brightness = int(np.sum(img) / ( W * H ))
+    img_max = tmp_img1
+    img_dif = tmp_img2
+    mask = tmp_img3
 
-    if img_add is not None:
-        np.add(img, img_add, tmp_img2)
-        np.clip(tmp_img2, 0, 255, out=img)
+    max_window = 11
+    mask_thresh = 20
+    maximum_filter1d(img_g, max_window, 0, output=img_max)
+    np.subtract(img_max, img_g, out=img_dif)
+    np.greater(img_dif, mask_thresh, out=mask)
 
-    # smooth the image for better continuity of segmentation
-    #gaussian_filter(img, fish_blur_sigmas, output=tmp_img2)
-    #img = tmp_img2
-
-    # find the dark pixels in each column
-    x_percentiles = np.percentile(img, dark_fish_percentile, axis=0)
-    mask = img < x_percentiles
-
+    img_brightness = int(np.sum(img_g) / ( W * H ))
+    
     # find the "heights" i.e. centers of mass in Y axis of dark pixels
-    x_heights = (np.sum((mask * np.array(range(img.shape[0]))[:,None]), axis=0) / np.sum(mask, axis=0))
+    x_heights = (np.sum((mask * np.array(range(img_g.shape[0]))[:,None]), axis=0) / np.sum(mask, axis=0))
 
     tail_slc = slice( int(W*avg_position_bounds[0]), int(W*avg_position_bounds[1]) )
     tail_position = int(np.sum( x_heights[tail_slc] ) / (tail_slc.stop - tail_slc.start))
@@ -79,8 +72,6 @@ def process_frame(img, img_add=None, debug_frame_sink=None, tmp_img1=None, tmp_i
     
     # illustrate the analysis decisions in an output movie frame
     if debug_frame_sink is not None:
-        for i in range(3):
-            img_rgb[:,:,i] = img
         img_rgb[:,:,2] *= (1 - mask)
         img_rgb[:,:,2] += mask * 255
         for x in range(int(W*avg_position_bounds[0]), int(W*avg_position_bounds[1])):
@@ -165,11 +156,6 @@ def main(moviename):
     # start the input movie decoder
     in_pipe = subprocess.Popen(readcmd, stdout=subprocess.PIPE, bufsize=frame_nbytes*24)
 
-    # HACK: prepare map to brighten the top and bottom of the images to reduce vignetting?
-    G = Gsigma(shape[0] / 6)
-    norm = G(0)
-    brighten = (1.0 - np.array([ G(y-shape[0]/2) / norm for y in range(shape[0]) ], dtype='float32')[:,None]) * 60
-
     t = 0
 
     prev_frame = None
@@ -186,7 +172,7 @@ def main(moviename):
     light_on_t = 0
     light_on_dur = None
 
-    font = ImageFont.truetype('FreeSans.ttf', 24)
+    font = ImageFont.truetype('FreeSans.ttf', 16)
 
     def debug_movie_sink(f):
         #out_pipe.stdin.write(f.tobytes())
@@ -227,8 +213,9 @@ def main(moviename):
         out_pipe = None
         sink = None
 
-    tmp_img1 = np.zeros(shape, dtype=np.float32)
-    tmp_img2 = np.zeros(shape, dtype=np.float32)
+    tmp_img1 = np.zeros(shape, dtype=np.uint8)
+    tmp_img2 = np.zeros(shape, dtype=np.uint8)
+    tmp_img3 = np.zeros(shape, dtype=np.bool)
         
     # process every input frame
     while t < nbframes:
@@ -237,10 +224,10 @@ def main(moviename):
 
         brightness, avg_position, position_bins, x_heights = process_frame(
             in_img,
-            img_add=brighten,
-            debug_frame_sink=sink,
             tmp_img1=tmp_img1,
-            tmp_img2=tmp_img2
+            tmp_img2=tmp_img2,
+            tmp_img3=tmp_img3,
+            debug_frame_sink=sink
         )
         if h5file is not None:
             h5d_brightness[t] = brightness
