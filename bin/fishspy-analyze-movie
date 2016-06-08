@@ -62,23 +62,28 @@ def process_frame(img, tmp_img1, tmp_img2, tmp_img3, debug_frame_sink=None):
     # find the "heights" i.e. centers of mass in Y axis of dark pixels
     x_heights = (np.sum((mask * np.array(range(img_g.shape[0]))[:,None]), axis=0) / np.sum(mask, axis=0))
 
+    tail_length = np.sum(x_heights > 0)
+
     tail_slc = slice( int(W*avg_position_bounds[0]), int(W*avg_position_bounds[1]) )
-    tail_position = int(np.sum( x_heights[tail_slc] ) / (tail_slc.stop - tail_slc.start))
+    tail_position = int(np.sum( x_heights[tail_slc] ) / np.sum( x_heights[tail_slc] > 0 ))
 
     position_bins = []
     for b in range(num_position_bins):
         bin_slc = slice( int(W*b/num_position_bins), int(W*(b+1)/num_position_bins) )
-        position_bins.append( np.sum( x_heights[bin_slc] ).astype(np.uint16) / (bin_slc.stop - bin_slc.start) )
+        position_bins.append(
+            int(np.sum( x_heights[bin_slc] ) / np.sum( x_heights[bin_slc] > 0 ))
+        )
     
     # illustrate the analysis decisions in an output movie frame
     if debug_frame_sink is not None:
         img_rgb[:,:,2] *= (1 - mask)
         img_rgb[:,:,2] += mask * 255
         for x in range(int(W*avg_position_bounds[0]), int(W*avg_position_bounds[1])):
-            img_rgb[x_heights[x], x, 0] = 255
+            if x_heights[x] > 0:
+                img_rgb[x_heights[x], x, 0] = 255
         debug_frame_sink(img_rgb)
     
-    return img_brightness, tail_position, position_bins, x_heights
+    return img_brightness, tail_position, position_bins, x_heights, tail_length
 
 def main(moviename):
 
@@ -165,12 +170,15 @@ def main(moviename):
 
     prev_frame = None
     idle_tail_positions = []
+    idle_tail_lengths = []
     idle_tail_position = None
+    idle_tail_length = None
     starting_brightness_levels = []
     starting_brightness_level = None
     brightness = None
     avg_position = None
     position_bins = None
+    tail_length = None
     note = ''
     light_on = False
     light_on_cnt = 0
@@ -193,7 +201,7 @@ def main(moviename):
             tsec = tsec % 60
             draw.text((0, 0), "Time: %.2d:%.2d:%04.1f" % (thour, tmin, tsec), (255,255,255), font=font)
             draw.text((0, 25), "Bright: %.3d" % brightness, (255,255,255), font=font)
-            draw.text((0, 50), "Position: %.3d" % avg_position, (255,255,255), font=font)
+            draw.text((0, 50), "Position: %.3d" % (avg_position,), (255,255,255), font=font)
             light_color = (0, 255, 0)
             if light_on_t > 0:
                 light_t = (t - light_on_t)
@@ -232,7 +240,7 @@ def main(moviename):
         # get raw pixels from input decoder and stuff into image buffer
         in_pipe.stdout.readinto(in_buffer)
 
-        brightness, avg_position, position_bins, x_heights = process_frame(
+        brightness, avg_position, position_bins, x_heights, tail_length = process_frame(
             in_img,
             tmp_img1=tmp_img1,
             tmp_img2=tmp_img2,
@@ -246,14 +254,18 @@ def main(moviename):
         # build up a baseline idle tail position
         if t < 100:
             idle_tail_positions.append(avg_position)
+            idle_tail_lengths.append(tail_length)
             starting_brightness_levels.append(brightness)
         elif t == 100:
             idle_tail_position = sum(idle_tail_positions) / 100
+            idle_tail_length = sum(idle_tail_lengths) / 100
             starting_brightness_level = sum(starting_brightness_levels) / 100
-        
+
         note = []
         if t >= 100:
             # comparisons to baseline
+            if float(tail_length) / idle_tail_length < 0.8:
+                note.append('tail blur')
             if abs(avg_position - idle_tail_position) > abs_tail_offset_threshold:
                 note.append('tail bent')
             if (brightness - starting_brightness_level) > (0.5 * light_toggle_threshold) and not light_on:
