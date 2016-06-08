@@ -104,7 +104,12 @@ def main(moviename):
     meta = meta['streams'][0]
     shape =  meta['height'], meta['width']
     nbframes = int(meta['nb_frames'])
-
+    
+    frate = meta['avg_frame_rate'].split('/')
+    assert type(frate) is list
+    assert len(frate) == 2
+    frate = float(frate[0]) / float(frate[1])
+    
     frame_nbytes = shape[0] * shape[1] * 3
     
     # this generates a stream of raw video pixels to standard output
@@ -182,8 +187,13 @@ def main(moviename):
             #f[avg_position,:,2] = 255
             img = toimage(f)
             draw = ImageDraw.Draw(img)
-            draw.text((0, 0), "Bright: %.3d" % brightness, (255,255,255), font=font)
-            draw.text((0, 25), "Position: %.3d" % avg_position, (255,255,255), font=font)
+            tsec = t / frate
+            tmin = int(tsec) / 60 % 60
+            thour = int(tsec) / 60 / 60
+            tsec = tsec % 60
+            draw.text((0, 0), "Time: %.2d:%.2d:%04.1f" % (thour, tmin, tsec), (255,255,255), font=font)
+            draw.text((0, 25), "Bright: %.3d" % brightness, (255,255,255), font=font)
+            draw.text((0, 50), "Position: %.3d" % avg_position, (255,255,255), font=font)
             light_color = (0, 255, 0)
             if light_on_t > 0:
                 light_t = (t - light_on_t)
@@ -194,13 +204,13 @@ def main(moviename):
                 light_t = ''
                 light_color = (128, 128, 128)
             draw.text(
-                (0, 50),
+                (0, 75),
                 #"Light %s event %d %s" % (light_on and 'ON' or 'off', light_on_cnt, light_t),
                 "Light %s event %d" % (light_on and 'ON' or 'off', light_on_cnt),
                 light_color,
                 font=font
             )
-            draw.text((0, 75), note, (255,255,255), font=font)
+            draw.text((0, 100), note, (255,255,255), font=font)
         else:
             img = toimage(f)
         out_pipe.stdin.write(img.tobytes())
