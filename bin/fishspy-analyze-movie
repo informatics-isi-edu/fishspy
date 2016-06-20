@@ -19,6 +19,7 @@ centroid_median_span = 2
 
 light_toggle_threshold = 20
 abs_tail_delta_threshold = 20
+abs_tail_delta_cap = 100
 abs_tail_offset_threshold = 30
 
 avg_position_bounds = (0.4, 0.85)
@@ -264,6 +265,7 @@ def main(moviename):
             starting_brightness_level = sum(starting_brightness_levels) / 100
 
         note = []
+        is_light_event = False
         if t >= 100:
             # comparisons to baseline
             if float(tail_length) / idle_tail_length < 0.8:
@@ -275,12 +277,14 @@ def main(moviename):
                 light_on_t = t
                 note.append('light turns on %d' % light_on_cnt)
                 light_on = True
+                is_light_event = True
             elif (brightness - starting_brightness_level) < (0.5 * light_toggle_threshold) and light_on:
                 note.append('light turns off %d' % light_on_cnt)
                 light_on = False
                 light_on_dur = t - light_on_t
                 light_on_t = 0
-                
+                is_light_event = True
+
         if prev_frame:
             # comparisons to previous frame
             if brightness - prev_frame[1] > light_toggle_threshold and not light_on:
@@ -288,19 +292,24 @@ def main(moviename):
                 light_on_t = t
                 note.append('light turns on %d' % light_on_cnt)
                 light_on = True
+                is_light_event = True
             elif prev_frame[1] - brightness > light_toggle_threshold and light_on:
                 note.append('light turns off %d' % light_on_cnt)
                 light_on = False
                 light_on_dur = t - light_on_t
                 light_on_t = 0
+                is_light_event = True
             if (abs(avg_position - prev_frame[2]) > abs_tail_delta_threshold):
                 note.append('tail fast')
 
         note = ','.join(note)
 
-        # conditionally log the frame results only if an interesting condition is noted
-        if note:
-            csvwriter1.writerow((t, brightness, avg_position, brightness - prev_frame[1], avg_position - prev_frame[2], note))
+        # conditionally log the frame results only on significant change
+        if prev_frame:
+            light_delta = brightness - prev_frame[1]
+            pos_delta = avg_position - prev_frame[2]
+            if (abs(pos_delta) > 1  and abs(pos_delta) < abs_tail_delta_cap) or is_light_event:
+                csvwriter1.writerow((t, brightness, avg_position, light_delta, pos_delta, note))
 
         csvwriter2.writerow( (t, brightness) + tuple(position_bins) )
             
