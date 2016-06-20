@@ -25,6 +25,8 @@ avg_position_bounds = (0.4, 0.85)
 
 num_position_bins = 5
 
+fnull = open(os.devnull, 'r+b')
+
 def process_frame(img, tmp_img1, tmp_img2, tmp_img3, debug_frame_sink=None):
     """Process frame image, returning (brightness, tail_position) pair.
 
@@ -96,7 +98,7 @@ def main(moviename):
     ]
 
     # go ahead and get the movie metadata
-    probe_pipe = subprocess.Popen(probecmd, stdout = subprocess.PIPE, bufsize=1024**2)
+    probe_pipe = subprocess.Popen(probecmd, stdin = fnull, stdout = subprocess.PIPE, bufsize=1024**2)
     probe_pipe.wait()
     doc = probe_pipe.stdout.read()
     del probe_pipe
@@ -164,7 +166,7 @@ def main(moviename):
     in_buffer = np.getbuffer(in_img)
 
     # start the input movie decoder
-    in_pipe = subprocess.Popen(readcmd, stdout=subprocess.PIPE, bufsize=frame_nbytes*24)
+    in_pipe = subprocess.Popen(readcmd, stdin=fnull, stdout=subprocess.PIPE, bufsize=frame_nbytes*24)
 
     t = 0
 
