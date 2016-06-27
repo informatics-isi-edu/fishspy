@@ -60,6 +60,9 @@ Fishspy is part of an experimental pipeline:
 3. The movie is analyzed with `fishspy-analyze-movie` to produce a
    time-series dataset quantifying the fish's tail movements and
    ambient light levels.
+4. The extracted time-series data is plotted with
+   `fishspy-plot-results` to produce a compact rectangular heatmap
+   representation of fish tail movements for each trial.
 
 ### Prerequisites
 
@@ -102,6 +105,45 @@ with movies having the following characteristics:
      file is usually small enough to read with naive CSV readers.
   - `movie_frame_measures.csv`: One row per frame with quantitative
      measures. This file is quite long, e.g. 72K rows per hour.
+
+### Plotting Results
+
+1. Start with the two analysis outputs from the previous step.
+2. Plot the results `fishspy-plot-results movie_events.csv movie_frame_measures.csv`
+  - The first argument must be the movie events CSV file.
+  - The second argument must be the frame measures CSV file.
+3. See the output, currently written to a fixed name in the current
+   working directory:
+  - `movie_plot.tiff`
+  
+The 2D plot represents time proceeding from top-left corner to
+bottom-right corner:
+
+- The time-series is split and resynchronized at each conditioned
+  stimulus activation event, represented by the left-most vertical
+  blue line.
+- The _leading_ activity immediately before each conditioned stimulus
+  period is shown preceding this left-most blue line.
+- The right-most blue line represents the conditioned stimulus
+  deactivation event for each trial. This boundary may appear ragged
+  as each trial may have a different measured conditioned stimulus
+  duration (as detected in the movie).
+- Each horizontal stripe of 5 lines represents the five measures from
+  `movie_frame_measures.csv`, which are displacement measurements at
+  different sections of the fish tail.
+- The total plot width is limited to the _median_ inter-trial
+  period. This affects the plotting of _trailing_ activity following
+  each stimulus period (at the edges of the plot):
+  - Shorter trailing periods are padded
+  - Longer trailing periods are truncated
+- Intensity of the green plot represents absolute value of tail
+  displacement on a frame-by-frame basis. This channel is
+  range-compressed using the square root function.
+- Temporary loss of tracking is depicted in red. This may happen
+  briefly during rapid tail movements due to motion blur in the
+  movie. A long period of red indicates persistent loss of tracking,
+  usually due to the fish leaving the imaging stage or some
+  debris obscuring view of the fish.
 
 ### Environment Parameters
 

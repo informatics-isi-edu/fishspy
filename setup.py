@@ -12,6 +12,7 @@ setup(
     version="0.1-prerelease",
     scripts=[
         "bin/fishspy-analyze-movie",
+        "bin/fishspy-plot-results"
     ],
     requires=["numpy", "scipy"],
     maintainer_email="support@misd.isi.edu",

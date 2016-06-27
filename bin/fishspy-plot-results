@@ -1,0 +1,147 @@
+#!/usr/bin/python
+
+import os
+import sys
+import csv
+import math
+import numpy as np
+import tifffile
+
+frame_bin_size = 1
+
+pos_bin_cnt = 5
+
+def main(eventcsv, framecsv):
+
+    # extract CS periods as [ (on_frame, off_frame), ... ]
+    CS_periods = []
+    
+    frameno_idx = None
+    comment_idx = None
+    t0 = None
+    t1 = None
+
+    f = open(eventcsv, 'r')
+    for row in csv.reader(f):
+        if frameno_idx is None:
+            frameno_idx = row.index('frameno')
+            comment_idx = row.index('comment')
+        else:
+            comment = row[comment_idx]
+            pattern = 'light turns '
+            pos = comment.find(pattern)
+            if pos >= 0:
+                turns_on = {'of': False, 'on': True }[comment[pos + len(pattern):][0:2]]
+                if turns_on:
+                    t0 = int(row[frameno_idx])
+                else:
+                    assert t0 is not None
+                    t1 = int(row[frameno_idx])
+                    CS_periods.append( (t0, t1) )
+
+    CS_periods = np.array(CS_periods, dtype=np.int32)
+
+    CS_cnt = CS_periods.shape[0]
+    CS_max_duration = (CS_periods[:,1] - CS_periods[:,0]).max()
+    CS_cycles = (CS_periods[1:,0] - CS_periods[0:-1,0])
+
+    print "%d periods, %d frames max duration, %f average cycle" % (CS_cnt, CS_max_duration, CS_cycles.mean())
+
+    # extract binned position data into array with shape FxB for B bins
+    frame_bins = []
+    frameno_idx = None
+    pos_bin_idxs = None
+    frameno = -1
+    
+    for row in csv.reader(open(framecsv, 'r')):
+        if frameno_idx is None:
+            frameno_idx = row.index('frameno')
+            pos_bin_idxs = [ row.index('position bin %d' % i) for i in range(5) ]
+        else:
+            assert int(row[frameno_idx]) == (frameno + 1), (frameno, row)
+            frameno = int(row[frameno_idx])
+            frame_bins.append( [ int(row[idx]) for idx in pos_bin_idxs ] )
+
+    frame_bins = np.array(frame_bins, dtype=np.int32)
+
+    print "%d frames, %d position bins" % frame_bins.shape
+    print "%d min/%d avg/%d max position spread" % (frame_bins.min(), frame_bins.mean(), frame_bins.max())
+
+    # zeros mean invalid measurements
+    invalid = np.zeros(frame_bins.shape, dtype=np.bool)
+
+    invalid = frame_bins == 0
+    invalid[1:,:] *= frame_bins[0:-1,:] == 0
+    invalid[0,:] = 1
+
+    # characterize statically invalid bins from first 100 frames
+    static_invalid = np.median(invalid[0:100,:], axis=0)[None,:]
+    
+    # inter-frame deltas but masking out invalid
+    frame_delta_bins = np.ma.masked_array(frame_bins, invalid)
+    frame_delta_bins[1:,:] -= frame_bins[0:-1,:]
+    
+    print "%d min/%d avg/%d max delta position spread" % (frame_delta_bins.min(), frame_delta_bins.mean(), frame_delta_bins.max())
+
+    # plot frame measures into period X time heat map
+    width = int(np.median(CS_cycles))
+    preroll = int((width - CS_max_duration) / 3.0)
+    img = np.zeros((CS_cnt, pos_bin_cnt, width, 3), dtype=np.float32)
+
+    print "%s plot space" % (img.shape,)
+
+    for period in range(CS_cnt):
+
+        # one data cycle
+        d0 = CS_periods[period, 0] - preroll
+        d1 = CS_periods[period + 1, 0] if period < (CS_cnt - 1) else frame_bins.shape[0]
+        dw = min(d1 - d0, img.shape[2])
+        d1 = d0 + dw
+        
+        dL = CS_periods[period, 1] - CS_periods[period, 0]
+
+        # figure out offset for preroll and padding if not enough preroll data available
+        pad = abs(d0) if d0 < 0 else 0
+        d0 += pad
+        i0 = pad
+        i1 = pad + dw
+
+        for bin in range(pos_bin_cnt):
+            img[period,bin,i0:i1,0] = ((invalid[d0:d1,bin] - static_invalid[:,bin]) > 0) * 200
+            img[period,bin,i0:i1,1] = np.abs(frame_delta_bins[d0:d1,bin])
+            img[period,bin,preroll,2] = 100
+            img[period,bin,preroll + dL,2] = 100
+            
+    img = img.reshape((CS_cnt * pos_bin_cnt, img.shape[2], 3))
+
+    img_full = img
+
+    x_reduce = 7
+    
+    img = np.zeros( (img_full.shape[0], img_full.shape[1] / x_reduce, img_full.shape[2]), dtype=np.float32)
+
+    for i in range(x_reduce):
+        img[:,:,:] += img_full[:,slice(i,img.shape[1]*x_reduce,x_reduce),:]
+    
+    print "%s plot image shape" % (img.shape,)
+
+    img = np.sqrt(img)
+    #img = np.log1p(img)
+    
+    #img -= img.min()
+
+    #img *= 255.0 / (img.max() - img.min())
+
+    img = np.clip(img * 5.0, 0.0, 255.0)
+
+    print "%s min/%s avg/%s max plot spread" % (img.min(), img.mean(), img.max())
+
+    tifffile.imsave('movie_plot.tiff', img.astype(np.uint8), compress=6)
+                
+            
+            
+if __name__ == '__main__':
+    events = sys.argv[1]
+    frames = sys.argv[2]
+    exit(main(events, frames))
+
