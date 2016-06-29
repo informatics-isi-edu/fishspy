@@ -112,6 +112,9 @@ with movies having the following characteristics:
 2. Plot the results `fishspy-plot-results movie_events.csv movie_frame_measures.csv`
   - The first argument must be the movie events CSV file.
   - The second argument must be the frame measures CSV file.
+  - Optional environment parameters `FISHSPY_US_CS_RATIO` and
+    `FISHSPY_TRIAL_COUNTS` modify plotting behavior slightly by adding
+    a magenta-colored unconditioned stimulus marker.
 3. See the output, currently written to a fixed name in the current
    working directory:
   - `movie_plot.tiff`
@@ -157,6 +160,14 @@ Environment variables can be set to modify the behavior of the
   which includes more detailed positional information for each frame
   as a vector of mid-line positions for every vertical column of the
   movie.
+- `FISHSPY_US_CS_RATIO=0.2`: For plotting, set ratio between
+  unconditioned and conditioned stimulus periods, e.g. default `0.2`
+  means 20 percent.
+- `FISHSPY_TRIAL_COUNTS=H,L,T,R`: For plotting, set number of trials
+  for each phase of experiment. Count _H_ is number of habituation
+  rounds, _L_ is number of learning rounds, _T_ is number of testing
+  rounds, and _R_ is number of retraining rounds. Specify `0` for any
+  phase that is skipped.
 
 ## Help and Contact
 
