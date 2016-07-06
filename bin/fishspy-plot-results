@@ -71,15 +71,27 @@ def main(eventcsv, framecsv):
     invalid = np.zeros(frame_bins.shape, dtype=np.bool)
 
     invalid = frame_bins == 0
-    invalid[1:,:] *= frame_bins[0:-1,:] == 0
+    invalid[1:,:] += frame_bins[0:-1,:] == 0
     invalid[0,:] = 1
 
+    # get optional invalid mask from user
+    user_invalid = [ int(x) for x in os.getenv('FISHSPY_INVALID_BINS', '').split(',') if x ]
+    if len(user_invalid) < invalid.shape[1]:
+        user_invalid.extend([ 0 for x in range(invalid.shape[1] - len(user_invalid)) ])
+    elif len(user_invalid) > invalid.shape[1]:
+        user_invalid = user_invalid[0:invalid.shape[1]]
+    user_invalid = np.array(user_invalid, dtype=np.bool)
+    invalid += user_invalid
+    user_invalid = user_invalid[None,:]
+        
     # characterize statically invalid bins from first 100 frames
-    static_invalid = np.median(invalid[0:100,:], axis=0)[None,:]
+    static_invalid = np.median(invalid[0:100,:], axis=0).astype(np.bool)[None,:] + user_invalid
     
     # inter-frame deltas but masking out invalid
-    frame_delta_bins = np.ma.masked_array(frame_bins, invalid)
-    frame_delta_bins[1:,:] -= frame_bins[0:-1,:]
+    frame_delta_bins = np.zeros(frame_bins.shape, dtype=np.float32)
+    frame_bins_masked = np.ma.masked_array(frame_bins, mask=invalid)#, fill_value = 0.0)
+    temp = frame_bins_masked[1:,:] - frame_bins_masked[0:-1,:]
+    frame_delta_bins[1:,:] = np.ma.filled(temp, fill_value=0.0)
     
     print "%d min/%d avg/%d max delta position spread" % (frame_delta_bins.min(), frame_delta_bins.mean(), frame_delta_bins.max())
 
@@ -119,17 +131,16 @@ def main(eventcsv, framecsv):
         i0 = pad
         i1 = pad + dw
 
-        for bin in range(pos_bin_cnt):
-            img[period,bin,i0:i1,0] = ((invalid[d0:d1,bin] - static_invalid[:,bin]) > 0) * 200
-            img[period,bin,i0:i1,1] = np.abs(frame_delta_bins[d0:d1,bin])
-            img[period,bin,preroll,2] = 400
-            img[period,bin,preroll + dL,2] = 400
+        img[period,:,i0:i1,0] = (((invalid[d0:d1,:] - static_invalid[:,:]) > 0)* 8.0).transpose((1,0))
+        img[period,:,i0:i1,1] = np.abs(frame_delta_bins[d0:d1,:]).transpose((1,0))
+        img[period,:,preroll,2] = 400
+        img[period,:,preroll + dL,2] = 400
 
-            if (trial_periods[1] <= period < trial_periods[2]) \
-               or (trial_periods[3] <= period):
-                # show unconditioned stimulus marker too
-                img[period,bin,preroll + int(dL * (1.0 - us_cs_ratio)),2] = 400
-                img[period,bin,preroll + int(dL * (1.0 - us_cs_ratio)),0] = 100
+        if (trial_periods[1] <= period < trial_periods[2]) \
+           or (trial_periods[3] <= period):
+            # show unconditioned stimulus marker too
+            img[period,:,preroll + int(dL * (1.0 - us_cs_ratio)),2] = 400
+            img[period,:,preroll + int(dL * (1.0 - us_cs_ratio)),0] = 100
             
     img = img.reshape((CS_cnt * pos_bin_cnt, img.shape[2], 3))
 
@@ -144,7 +155,8 @@ def main(eventcsv, framecsv):
     
     print "%s plot image shape" % (img.shape,)
 
-    img = np.sqrt(img)
+    #img *= 2.0
+    img = np.sqrt(img) * 5.0
     #img = np.log1p(img)
     
     #img -= img.min()

@@ -168,6 +168,15 @@ Environment variables can be set to modify the behavior of the
   rounds, _L_ is number of learning rounds, _T_ is number of testing
   rounds, and _R_ is number of retraining rounds. Specify `0` for any
   phase that is skipped.
+- `FISHSPY_INVALID_BINS=0,0,...,1`: For plotting, specify a list of
+  validity flags for frame-measurement bins. The comma-separated list
+  should have the same number of elements as the number of bins in the
+  `frame_measures.csv` file. It will be extended with `0` values if it
+  is too short, or truncated if it is too long. Each `0` says to
+  consider the bin to contain valid data, while `1` means to ignore
+  that bin for plotting. This can be used, for example, to ignore the
+  final bin if the tip of the tail loses tracking too often and fills
+  the plot with red marks.
 
 ## Help and Contact
 
