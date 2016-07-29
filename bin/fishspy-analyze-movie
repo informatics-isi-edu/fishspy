@@ -79,11 +79,11 @@ def process_frame(img, tmp_img1, tmp_img2, tmp_img3, debug_frame_sink=None):
     
     # illustrate the analysis decisions in an output movie frame
     if debug_frame_sink is not None:
-        img_rgb[:,:,2] *= (1 - mask)
-        img_rgb[:,:,2] += mask * 255
+        img_rgb[:,:,2] *= (np.uint8(1) - mask)
+        img_rgb[:,:,2] += mask * np.uint8(255)
         for x in range(int(W*avg_position_bounds[0]), int(W*avg_position_bounds[1])):
             if x_heights[x] > 0:
-                img_rgb[x_heights[x], x, 0] = 255
+                img_rgb[x_heights[x], x, 0] = np.uint8(255)
         debug_frame_sink(img_rgb)
     
     return img_brightness, tail_position, position_bins, x_heights, tail_length
