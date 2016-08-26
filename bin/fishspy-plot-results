@@ -102,7 +102,7 @@ def main(eventcsv, framecsv):
 
     print "%s plot space" % (img.shape,)
 
-    us_cs_ratio = float(os.getenv('FISHSPY_US_CS_RATION', '0.2'))
+    us_cs_ratio = float(os.getenv('FISHSPY_US_CS_RATIO', '0.2'))
     trial_periods = np.zeros( (4,), dtype=np.int32 )
     trial_periods[1:] = CS_cnt
 
