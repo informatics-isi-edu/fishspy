@@ -6,6 +6,7 @@ import csv
 import math
 import numpy as np
 import png
+import re
 
 frame_bin_size = 1
 
@@ -167,7 +168,15 @@ def main(eventcsv, framecsv):
 
     print "%s min/%s avg/%s max plot spread" % (img.min(), img.mean(), img.max())
 
-    png.from_array(img.astype(np.uint8), mode='RGB').save('movie_plot.png')
+    m1 = re.match('^(?P<id>[^.]+)[.]events[.]csv$', eventcsv)
+    m2 = re.match('^(?P<id>[^.]+)[.]frame_measures[.]csv$', framecsv)
+    if m1 and m2 and m1.groupdict().get('id') == m2.groupdict().get('id'):
+        png_filename = '%s.plot.png' % m1.groupdict().get('id')
+    else:
+        # old-style for backward compatibility
+        png_filename = 'movie_plot.png'
+
+    png.from_array(img.astype(np.uint8), mode='RGB').save(png_filename)
 
 
 if __name__ == '__main__':
