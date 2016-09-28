@@ -117,7 +117,7 @@ with movies having the following characteristics:
     a magenta-colored unconditioned stimulus marker.
 3. See the output, currently written to a fixed name in the current
    working directory:
-  - `movie_plot.tiff`
+  - `movie_plot.png`
   
 The 2D plot represents time proceeding from top-left corner to
 bottom-right corner:

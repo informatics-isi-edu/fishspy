@@ -5,7 +5,7 @@ import sys
 import csv
 import math
 import numpy as np
-import tifffile
+import png
 
 frame_bin_size = 1
 
@@ -167,10 +167,9 @@ def main(eventcsv, framecsv):
 
     print "%s min/%s avg/%s max plot spread" % (img.min(), img.mean(), img.max())
 
-    tifffile.imsave('movie_plot.tiff', img.astype(np.uint8), compress=6)
-                
-            
-            
+    png.from_array(img.astype(np.uint8), mode='RGB').save('movie_plot.png')
+
+
 if __name__ == '__main__':
     events = sys.argv[1]
     frames = sys.argv[2]
