@@ -12,6 +12,7 @@ import scipy.ndimage as nd
 from scipy.ndimage import gaussian_filter, maximum_filter1d, minimum_filter1d
 from scipy.misc import toimage
 from PIL import Image, ImageDraw, ImageFont
+import re
 
 dark_fish_percentile = 3
 fish_blur_sigmas = 1
@@ -89,6 +90,11 @@ def process_frame(img, tmp_img1, tmp_img2, tmp_img3, debug_frame_sink=None):
     return img_brightness, tail_position, position_bins, x_heights, tail_length
 
 def main(moviename):
+    try:
+        m = re.match('^(?P<id>[^.]+)[.]m4v$', os.path.basename(moviename))
+        movie_id = m.groupdict()['id']
+    except:
+        raise ValueError('Movie name "%s" should be in form "ID.m4v" with valid experiment identifier.' % moviename)
 
     # this produces a JSON metadata document about the movie on standard output
     probecmd = [
@@ -141,18 +147,18 @@ def main(moviename):
         '-vcodec', 'libx264',
         '-pix_fmt', 'yuv420p',
         '-x264opts', 'crf=31:bframes=5',
-        'movie_debug.m4v'
+        '%s.debug.m4v' % movie_id
     ]
 
     # setup the analysis output streams
-    csvwriter1 = csv.writer(open('movie_events.csv', 'w'))
+    csvwriter1 = csv.writer(open('%s.events.csv' % movie_id, 'w'))
     csvwriter1.writerow( ('frameno','avg. brightness','avg. tailpos','avg. brightness delta','avg. tailpos delta','comment') )
 
-    csvwriter2 = csv.writer(open('movie_frame_measures.csv', 'w'))
+    csvwriter2 = csv.writer(open('%s.frame_measures.csv' % movie_id, 'w'))
     csvwriter2.writerow( ('frameno','avg. brightness') + tuple([ 'position bin %d' % b for b in range(num_position_bins) ]) )
 
     if os.getenv('FISHSPY_HDF5', 'false').lower() == 'true':
-        h5file = h5py.File('movie_frame_measures.hdf5', 'w')
+        h5file = h5py.File('%s.frame_measures.hdf5' % movie_id, 'w')
         h5file.attrs['src_movie'] = moviename
         h5file.attrs['X'] = shape[1]
         h5file.attrs['Y'] = shape[0]
