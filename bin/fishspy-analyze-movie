@@ -18,7 +18,7 @@ dark_fish_percentile = 3
 fish_blur_sigmas = 1
 centroid_median_span = 2
 
-light_toggle_threshold = 20
+light_toggle_threshold = 10
 abs_tail_delta_threshold = 20
 abs_tail_delta_cap = 100
 abs_tail_offset_threshold = 30
@@ -26,6 +26,8 @@ abs_tail_offset_threshold = 30
 avg_position_bounds = (0.4, 0.85)
 
 num_position_bins = 5
+
+num_calibration_frames = 100
 
 fnull = open(os.devnull, 'r+b')
 
@@ -177,22 +179,29 @@ def main(moviename):
 
     t = 0
 
-    prev_frame = None
+    # arrays to collect calibration points
     idle_tail_positions = []
     idle_tail_lengths = []
+    starting_brightness_levels = []
+
+    # calibrated averages
     idle_tail_position = None
     idle_tail_length = None
-    starting_brightness_levels = []
-    starting_brightness_level = None
+    light_bases = None
+
+    # iterative state tracking for event detection, debug output, etc.
+    prev_frame = None
+    prev_light_index = None
+    
     brightness = None
     avg_position = None
     position_bins = None
     tail_length = None
     note = ''
-    light_on = False
-    light_on_cnt = 0
-    light_on_t = 0
-    light_on_dur = None
+    light_index = 0
+
+    is_light_event = None
+    light_cycle_cnt = 1
 
     font = ImageFont.truetype('FreeSans.ttf', 16)
 
@@ -211,19 +220,14 @@ def main(moviename):
             draw.text((0, 0), "Time: %.2d:%.2d:%04.1f" % (thour, tmin, tsec), (255,255,255), font=font)
             draw.text((0, 25), "Bright: %.3d" % brightness, (255,255,255), font=font)
             draw.text((0, 50), "Position: %.3d" % (avg_position,), (255,255,255), font=font)
-            light_color = (0, 255, 0)
-            if light_on_t > 0:
-                light_t = (t - light_on_t)
-                if light_on_dur is not None and (light_t > (light_on_dur/2)):
-                    light_color = (255, 0, 0)
-                light_t = '%.3d' % light_t
-            else:
-                light_t = ''
-                light_color = (128, 128, 128)
+            light_color = [
+                (128,128,128),
+                (0, 255, 0),
+                (255, 0, 0)
+            ][light_index]
             draw.text(
                 (0, 75),
-                #"Light %s event %d %s" % (light_on and 'ON' or 'off', light_on_cnt, light_t),
-                "Light %s event %d" % (light_on and 'ON' or 'off', light_on_cnt),
+                "Light state=%s event=%s" % (['off','CS','US'][light_index], light_cycle_cnt),
                 light_color,
                 font=font
             )
@@ -261,50 +265,47 @@ def main(moviename):
             h5d_x_heights[t,:] = x_heights
 
         # build up a baseline idle tail position
-        if t < 100:
+        if t < num_calibration_frames:
             idle_tail_positions.append(avg_position)
             idle_tail_lengths.append(tail_length)
             starting_brightness_levels.append(brightness)
-        elif t == 100:
-            idle_tail_position = sum(idle_tail_positions) / 100
-            idle_tail_length = sum(idle_tail_lengths) / 100
-            starting_brightness_level = sum(starting_brightness_levels) / 100
+        elif t == num_calibration_frames:
+            idle_tail_position = sum(idle_tail_positions) / num_calibration_frames
+            idle_tail_length = sum(idle_tail_lengths) / num_calibration_frames
+            light_bases = [ sum(starting_brightness_levels) / num_calibration_frames ]
+            light_index = 0
 
         note = []
         is_light_event = False
-        if t >= 100:
+        if t >= num_calibration_frames:
             # comparisons to baseline
             if float(tail_length) / idle_tail_length < 0.8:
                 note.append('tail blur')
+
             if abs(avg_position - idle_tail_position) > abs_tail_offset_threshold:
                 note.append('tail bent')
-            if (brightness - starting_brightness_level) > (0.5 * light_toggle_threshold) and not light_on:
-                light_on_cnt += 1
-                light_on_t = t
-                note.append('light turns on %d' % light_on_cnt)
-                light_on = True
-                is_light_event = True
-            elif (brightness - starting_brightness_level) < (0.5 * light_toggle_threshold) and light_on:
-                note.append('light turns off %d' % light_on_cnt)
-                light_on = False
-                light_on_dur = t - light_on_t
-                light_on_t = 0
-                is_light_event = True
 
+            if (brightness - light_bases[-1]) > light_toggle_threshold:
+                # expand our set of light tiers, assumes monotonic ramp during discovery
+                light_bases.append(brightness)
+
+            prev_light_index = light_index
+
+            # rough fit our current light-index
+            for light_index in range(len(light_bases)):
+                if abs(brightness - light_bases[light_index]) < light_toggle_threshold:
+                    break
+
+            if prev_light_index != light_index:
+                if light_index == 0:
+                    if prev_light_index > 0:
+                        light_cycle_cnt += 1
+                    
+                note.append('light state=%s cycle=%d' % (['off','CS','US'][light_index], light_cycle_cnt))
+                is_light_event = True
+                    
         if prev_frame:
             # comparisons to previous frame
-            if brightness - prev_frame[1] > light_toggle_threshold and not light_on:
-                light_on_cnt += 1
-                light_on_t = t
-                note.append('light turns on %d' % light_on_cnt)
-                light_on = True
-                is_light_event = True
-            elif prev_frame[1] - brightness > light_toggle_threshold and light_on:
-                note.append('light turns off %d' % light_on_cnt)
-                light_on = False
-                light_on_dur = t - light_on_t
-                light_on_t = 0
-                is_light_event = True
             if (abs(avg_position - prev_frame[2]) > abs_tail_delta_threshold):
                 note.append('tail fast')
 
