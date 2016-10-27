@@ -156,6 +156,10 @@ Environment variables can be set to modify the behavior of the
 - `DEBUG_MOVIE=true`: Enable output of `movie_debug.m4v` which
   includes each input frame with some additional markup illustrating
   the analysis.
+- `FISHSPY_LOGLEVEL=info`: Default log-level is `info` and also
+  includes continues statistics from `ffmpeg`. Other values `error` or
+  `fatal` will produce less verbose output useful in scripted
+  scenarios.
 - `FISHSPY_HDF5=true`: Enable output of `movie_frame_measures.hdf5`
   which includes more detailed positional information for each frame
   as a vector of mid-line positions for every vertical column of the

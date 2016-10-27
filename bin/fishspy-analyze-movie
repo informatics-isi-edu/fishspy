@@ -125,10 +125,13 @@ def main(moviename):
     frate = float(frate[0]) / float(frate[1])
     
     frame_nbytes = shape[0] * shape[1] * 3
+
+    ffmpeg_loglevel = os.getenv('FISHSPY_LOGLEVEL', 'info')
     
     # this generates a stream of raw video pixels to standard output
     readcmd = [
         'ffmpeg',
+        '-loglevel', ffmpeg_loglevel, '-stats' if ffmpeg_loglevel == 'info' else '-nostats',
         '-i', moviename,
         '-f', 'image2pipe', '-pix_fmt', 'rgb24',
         '-vcodec', 'rawvideo', '-'
@@ -137,6 +140,7 @@ def main(moviename):
     # this accepts a stream of raw video pixels on standard input
     writecmd = [
         'ffmpeg',
+        '-loglevel', ffmpeg_loglevel, '-stats' if ffmpeg_loglevel == 'info' else '-nostats',
         '-y', # clobber
         '-f', 'rawvideo',
         '-s', '%dx%d' % (shape[1], shape[0]),
