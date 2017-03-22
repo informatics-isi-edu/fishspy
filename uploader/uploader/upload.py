@@ -49,12 +49,12 @@ class FishspyUpload(DerivaUpload):
         """
         logging.info("Uploading file: [%s]" % file_path)
 
-        # 1. Retrieve the subject id for the matched accession from the catalog
+        # 1. Retrieve the record for the matched accession from the catalog
         accession = os.path.splitext(os.path.basename(file_path))[0]
         record = self._getBehaviorRecord(accession)
         if not record:
             self.invalid_accessions.append(accession)
-            logging.warn("Ignoring file [%s] due to invalid target accession: %s" % (file_path, accession))
+            logging.warning("Ignoring file [%s] due to invalid target accession: %s" % (file_path, accession))
             return False
 
         # 2. Assemble the attributes used for the upload
@@ -88,8 +88,8 @@ class FishspyUpload(DerivaUpload):
         # 4. update the record in the catalog -- fail if there is already an existing entry for this file
         catalog_table = asset_mapping['catalog_table']
         if record['Raw URL'] == url:
-            # idempotent update?  TODO: what to return?
-            raise NotImplementedError()
+            # idempotent update, do nothing, return success
+            return True
         elif record['Raw URL'] is None:
             # we only want to transition the record from null -> URL and not overwrite
             return self._catalogRecordUpdate(
@@ -98,8 +98,10 @@ class FishspyUpload(DerivaUpload):
                 {"ID": accession, "Raw URL": url}
             )
         else:
-            # conflict!  TODO: what to return?
-            raise NotImplementedError()
+            # conflict!
+            logging.error("A different file has already been submitted for accession %s" % accession)
+            return False
+
 
 def upload(path):
     init_logging(level=logging.INFO)
