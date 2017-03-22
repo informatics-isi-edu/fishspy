@@ -17,28 +17,27 @@ class FishspyUpload(DerivaUpload):
         self.behavior_map.clear()
         self.invalid_accessions = []
 
-    def _getSubjectID(self, accession):
+    def _getBehaviorRecord(self, accession):
         """
-        Helper function that queries the catalog to get a subject id for a given accession.
+        Helper function that queries the catalog to get a record for a given accession.
         :param accession:
-        :return: the subject_id, or None
+        :return: the record object or None
         """
-        subject_id = self.behavior_map.get(accession)
-        if not subject_id and accession not in self.invalid_accessions:
+        record = self.behavior_map.get(accession)
+        if not record and accession not in self.invalid_accessions:
             try:
                 logging.debug("Validating accession: %s" % accession)
-                path = '/attribute/A:=Zebrafish:Behavior/ID=%s/$A/Subject@sort(Subject)?limit=1' % \
-                       urlquote(accession, '')
-                r = self.catalog.get(path)
-                resp = r.json()
+                path = '/entity/Zebrafish:Behavior/ID=%s' % urlquote(accession, '')
+                resp = self.catalog.get(path).json()
                 if len(resp) > 0:
-                    subject_id = resp[0]['Subject']
-                    self.behavior_map[accession] = subject_id
+                    assert len(resp) == 1
+                    record = resp[0]
+                    self.behavior_map[accession] = record
             except:
                 (etype, value, traceback) = sys.exc_info()
                 logging.error(format_exception(value))
 
-        return subject_id
+        return record
 
     def uploadFile(self, file_path, asset_mapping, callback=None):
         """
@@ -52,8 +51,8 @@ class FishspyUpload(DerivaUpload):
 
         # 1. Retrieve the subject id for the matched accession from the catalog
         accession = os.path.splitext(os.path.basename(file_path))[0]
-        subject_id = self._getSubjectID(accession)
-        if not subject_id:
+        record = self._getBehaviorRecord(accession)
+        if not record:
             self.invalid_accessions.append(accession)
             logging.warn("Ignoring file [%s] due to invalid target accession: %s" % (file_path, accession))
             return False
@@ -68,15 +67,17 @@ class FishspyUpload(DerivaUpload):
         # 3. Perform the hatrac upload -- duplicates (based on object name and md5 hash) will not be uploaded
         url = None
         try:
-            path = "/".join([asset_mapping['hatrac_namespace'], subject_id, file_name])
-            url = self.store.put_loc(path,
-                                     file_path,
-                                     {"Content-Type": content_type},
-                                     hash_base64,
-                                     chunked=True,
-                                     create_parents=True,
-                                     allow_versioning=False,
-                                     callback=callback)
+            path = "/".join([asset_mapping['hatrac_namespace'], record['Subject'], file_name])
+            url = self.store.put_loc(
+                path,
+                file_path,
+                {"Content-Type": content_type},
+                hash_base64,
+                chunked=True,
+                create_parents=True,
+                allow_versioning=False,
+                callback=callback
+            )
         except:
             (etype, value, traceback) = sys.exc_info()
             logging.error("Unable to upload file: [%s] - %s" % (file_path, format_exception(value)))
@@ -86,10 +87,19 @@ class FishspyUpload(DerivaUpload):
 
         # 4. update the record in the catalog -- fail if there is already an existing entry for this file
         catalog_table = asset_mapping['catalog_table']
-        return self._catalogRecordUpdate(catalog_table,
-                                         {"ID": accession, "Raw URL": None},
-                                         {"ID": accession, "Raw URL": url})
-
+        if record['Raw URL'] == url:
+            # idempotent update?  TODO: what to return?
+            raise NotImplementedError()
+        elif record['Raw URL'] is None:
+            # we only want to transition the record from null -> URL and not overwrite
+            return self._catalogRecordUpdate(
+                catalog_table,
+                {"ID": accession, "Raw URL": None},
+                {"ID": accession, "Raw URL": url}
+            )
+        else:
+            # conflict!  TODO: what to return?
+            raise NotImplementedError()
 
 def upload(path):
     init_logging(level=logging.INFO)
