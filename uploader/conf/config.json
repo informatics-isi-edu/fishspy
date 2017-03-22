@@ -1,0 +1,19 @@
+{
+    "server":
+    {
+        "protocol": "https",
+        "host": "synapse-dev.isrd.isi.edu",
+        "catalog_id": 1
+    },
+    "asset_mappings":
+    [
+        {
+            "file_pattern":"Bhv.*",
+            "ext_pattern":".*[.](?P<ext>m4v)$",
+            "catalog_table":"Zebrafish:Behavior",
+            "hatrac_namespace":"/hatrac/Zf",
+            "checksum_types": ["md5"]
+        }
+    ]
+
+}
