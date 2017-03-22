@@ -47,7 +47,8 @@ class FishspyUpload(DerivaUpload):
         :param callback:
         :return:
         """
-        logging.info("Uploading file: [%s]" % file_path)
+        server = self.config['server']['protocol'] + "://" + self.config['server']['host']
+        logging.info("Uploading file: [%s] to host %s" % (file_path, server))
 
         # 1. Retrieve the record for the matched accession from the catalog
         accession = os.path.splitext(os.path.basename(file_path))[0]
