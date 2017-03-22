@@ -1,8 +1,7 @@
-#!/usr/bin/python
 import os
 import sys
 import logging
-from deriva_common import read_config, read_credentials, init_logging, format_exception, urlquote
+from deriva_common import read_config, read_credentials, resource_path, init_logging, format_exception, urlquote
 from deriva_io.deriva_upload import DerivaUpload
 
 
@@ -93,9 +92,9 @@ class FishspyUpload(DerivaUpload):
 
 
 def upload(path):
-    init_logging(level=logging.DEBUG)
-    config = read_config(os.path.join('conf', 'config.json'))
-    credentials = read_credentials(os.path.join('conf', 'credentials.json'))
+    init_logging(level=logging.INFO)
+    config = read_config(resource_path(os.path.join('conf', 'config.json')))
+    credentials = read_credentials(resource_path(os.path.join('conf', 'credentials.json')))
     fs_upload = FishspyUpload(config, credentials)
     if fs_upload.scanDirectory(path, False):
         fs_upload.uploadFiles()
