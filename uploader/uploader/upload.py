@@ -111,12 +111,6 @@ def upload(path):
     fs_upload = FishspyUpload(config, credentials)
     if fs_upload.scanDirectory(path, False):
         fs_upload.uploadFiles()
-    if fs_upload.failed_uploads:
-        logging.warning("The following file(s) failed to upload due to errors:\n\n%s\n" %
-                        '\n'.join(sorted(fs_upload.failed_uploads)))
-    if fs_upload.skipped_uploads:
-        logging.warning("The following file(s) were skipped because they did not satisfy the matching criteria "
-                        "of the configuration:\n\n%s" % '\n'.join(sorted(fs_upload.skipped_uploads)))
     fs_upload.cleanup()
 
 if __name__ == '__main__':

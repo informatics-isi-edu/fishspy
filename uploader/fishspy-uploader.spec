@@ -6,7 +6,7 @@ block_cipher = None
 a = Analysis(['uploader\\upload.py'],
              pathex=[''],
              binaries=None,
-             datas=[('conf\\config.json', 'conf'), ('conf\\credentials.json', 'conf')],
+             datas=[('conf', 'conf')],
              hiddenimports=[],
              hookspath=[],
              runtime_hooks=[],
@@ -27,3 +27,10 @@ exe = EXE(pyz,
           strip=False,
           upx=True,
           console=True )
+
+# for MacOS, if needed
+app = BUNDLE(exe,
+         name='fishspy-uploader.app',
+         icon=None,
+         bundle_identifier=None,
+         info_plist={'NSHighResolutionCapable': 'True'})
