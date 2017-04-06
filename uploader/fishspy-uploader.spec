@@ -22,7 +22,7 @@ exe = EXE(pyz,
           a.binaries,
           a.zipfiles,
           a.datas,
-          name='fishspy-uploader',
+          name='synapse-uploader',
           debug=False,
           strip=False,
           upx=True,
@@ -30,7 +30,7 @@ exe = EXE(pyz,
 
 # for MacOS, if needed
 app = BUNDLE(exe,
-         name='fishspy-uploader.app',
+         name='synapse-uploader.app',
          icon=None,
          bundle_identifier=None,
          info_plist={'NSHighResolutionCapable': 'True'})

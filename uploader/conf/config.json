@@ -10,8 +10,31 @@
         {
             "file_pattern":"Bhv.*",
             "ext_pattern":".*[.](?P<ext>m4v)$",
-            "catalog_table":"Zebrafish:Behavior",
-            "hatrac_namespace":"/hatrac/Zf",
+            "synapse_file_type": "behavior movie",
+            "checksum_types": ["md5"]
+        },
+	{
+            "file_pattern":"Img.*",
+            "ext_pattern":".*[.](?P<ext>ome[.]tiff+)$",
+            "synapse_file_type": "spim image",
+            "checksum_types": ["md5"]
+        },
+	{
+            "file_pattern":"CropImg.*",
+            "ext_pattern":".*[.](?P<ext>ome[.]tiff+)$",
+            "synapse_file_type": "cropped image",
+            "checksum_types": ["md5"]
+        },
+	{
+            "file_pattern":"(Roi|Crop|Syn).*(segments|synapses)",
+            "ext_pattern":".*[.](?P<ext>csv)$",
+            "synapse_file_type": "synapse list",
+            "checksum_types": ["md5"]
+        },
+	{
+            "file_pattern":"(Roi|Crop|Nuc).*nuclei",
+            "ext_pattern":".*[.](?P<ext>csv)$",
+            "synapse_file_type": "nucleus list",
             "checksum_types": ["md5"]
         }
     ]

@@ -4,41 +4,79 @@ import logging
 from deriva_common import read_config, read_credentials, resource_path, init_logging, format_exception, urlquote
 from deriva_io.deriva_upload import DerivaUpload
 
-
-class FishspyUpload(DerivaUpload):
-
-    behavior_map = dict()
-    invalid_accessions = list()
+class SynapseUpload (DerivaUpload):
 
     def __init__(self, config, credentials):
         DerivaUpload.__init__(self, config, credentials)
 
-    def cleanup(self):
-        self.behavior_map.clear()
-        self.invalid_accessions = []
+    def getAccessionInfo(file_path, asset_mapping):
+        base_name = os.path.basename(file_path)
+        file_type = asset_mapping['synapse_file_type']
 
-    def _getBehaviorRecord(self, accession):
-        """
-        Helper function that queries the catalog to get a record for a given accession.
-        :param accession:
-        :return: the record object or None
-        """
-        record = self.behavior_map.get(accession)
-        if not record and accession not in self.invalid_accessions:
-            try:
-                logging.debug("Validating accession: %s" % accession)
-                path = '/entity/Zebrafish:Behavior/ID=%s' % urlquote(accession, '')
-                resp = self.catalog.get(path).json()
-                if len(resp) > 0:
-                    assert len(resp) == 1
-                    record = resp[0]
-                    self.behavior_map[accession] = record
-            except:
-                (etype, value, traceback) = sys.exc_info()
-                logging.error(format_exception(value))
+        _region_url_templ = '/attribute/I:=Zebrafish:Image/Zebrafish:Image%20Region/ID=%(ID)s/*,Subject:=I:Subject'
 
-        return record
+        pattern, query_url_template, base_record_type = {
+            'behavior movie': (
+                '(?P<ID>[^.]+)[.]m4v$',
+                '/entity/Zebrafish:Behavior/ID=%(ID)s',
+                'Behavior'
+            ),
+            'spim image': (
+                '(?P<ID>[^.]+)[.]ome[.]tiff?$',
+                '/entity/Zebrafish:Image/ID=%(ID)s',
+                'Image',
+            ),
+            'cropped image': (
+                '(?P<ID>[^.]+)[.]ome[.]tiff?$',
+                _region_url_templ,
+                'Image%20Region'
+            ),
+            'synapse list': (
+                '(?P<ID>[^-._]+)[-._](segments|synapses)[.]csv$',
+                _region_url_templ,
+                'Image%20Region'
+            ),
+            'nucleus list': (
+                '(?P<ID>[^-._]+)[-._]nuclei[.]csv$',
+                _region_url_templ,
+                'Image%20Region'
+            ),
+        }[file_type]
+        
+        m = re.match(pattern, base_name)
+        if m:
+            results = self.catalog.get(query_url_template % m.groupdict()).json()
+            if results:
+                return (base_record_type, row[0])
+            else:
+                raise ValueError('File "%s" does not match an existing %s record in the catalog.' % (base_name, file_type))
+        else:
+            raise ValueError('File "%s" does not look like a %s file name.' % (base_name, file_type))
 
+    def getUpdateInfo(accession_info, url, asset_mapping):
+        file_type = asset_mapping['synapse_file_type']
+        url_column = {
+            'behavior movie': 'Raw URL',
+            'spim image': 'URL',
+            'cropped image': None,
+            'synapse list': 'Segments URL',
+            'nucleus list': 'Segments URL',
+        }[file_type]
+
+        original = {'ID': accession_info['ID']}
+        update = {}
+
+        if url_column:
+            if accession_info[url_column]:
+                if accession_info[url_column] == url:
+                    pass
+                else:
+                    raise ValueError('A different file already exists for accession ID %s.' % accession_info['ID'])
+            else:
+                update[url_column] = url
+
+        return original, update
+        
     def uploadFile(self, file_path, asset_mapping, callback=None):
         """
 
@@ -47,62 +85,28 @@ class FishspyUpload(DerivaUpload):
         :param callback:
         :return:
         """
-        server = self.config['server']['protocol'] + "://" + self.config['server']['host']
-        logging.info("Uploading file: [%s] to host %s" % (file_path, server))
-
-        # 1. Retrieve the record for the matched accession from the catalog
-        accession = os.path.splitext(os.path.basename(file_path))[0]
-        record = self._getBehaviorRecord(accession)
-        if not record:
-            self.invalid_accessions.append(accession)
-            logging.warning("Ignoring file [%s] due to invalid target accession: %s" % (file_path, accession))
-            return False
-
-        # 2. Assemble the attributes used for the upload
-        file_name = self.getFileDisplayName(file_path, asset_mapping)
+        base_name = os.path.basename(file_path)
+        base_record_type, accession_info = self.getAccessionInfo(file_path, asset_mapping)
+        object_name = '/hatrac/Zf/%s/%s' % (accession_info['Subject'], base_name])
         content_type = self.guessContentType(file_path)
-        hashes = self.getFileHashes(file_path, asset_mapping.get('checksum_types', ['md5']))
-        hash_type = list(hashes.keys())[0]
-        hash_base64 = hashes[hash_type][1]
 
-        # 3. Perform the hatrac upload -- duplicates (based on object name and md5 hash) will not be uploaded
-        url = None
-        try:
-            path = "/".join([asset_mapping['hatrac_namespace'], record['Subject'], file_name])
-            url = self.store.put_loc(
-                path,
-                file_path,
-                {"Content-Type": content_type},
-                hash_base64,
-                chunked=True,
-                create_parents=True,
-                allow_versioning=False,
-                callback=callback
-            )
-        except:
-            (etype, value, traceback) = sys.exc_info()
-            logging.error("Unable to upload file: [%s] - %s" % (file_path, format_exception(value)))
+        url = self.store.put_loc(
+            object_name,
+            file_path,
+            {"Content-Type": content_type},
+            chunked=True,
+            create_parents=True,
+            allow_versioning=False,
+            callback=callback
+        )
 
-        if not url:
-            return False
-
-        # 4. update the record in the catalog -- fail if there is already an existing entry for this file
-        catalog_table = asset_mapping['catalog_table']
-        if record['Raw URL'] == url:
-            # idempotent update, do nothing, return success
-            return True
-        elif record['Raw URL'] is None:
-            # we only want to transition the record from null -> URL and not overwrite
-            return self._catalogRecordUpdate(
-                catalog_table,
-                {"ID": accession, "Raw URL": None},
-                {"ID": accession, "Raw URL": url}
-            )
-        else:
-            # conflict!
-            logging.error("A different file has already been submitted for accession %s" % accession)
-            return False
-
+        original_info, update_info = self.getUpdateInfo(accession_info, url, asset_mapping)
+        
+        return self._catalogRecordUpdate(
+            'Zebrafish:%s' % base_record_type,
+            original_info,
+            update_info
+        )
 
 def upload(path):
     init_logging(level=logging.INFO)

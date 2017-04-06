@@ -3,14 +3,14 @@
 # Distributed under the GNU GPL 3.0 license. See LICENSE for more info.
 #
 
-""" Installation script for Fishspy Upload
+""" Installation script for Synapse Upload
 """
 
 from setuptools import setup, find_packages
 
 setup(
-    name="fishspy_upload",
-    description="Fishspy Upload Tools",
+    name="synapse_upload",
+    description="Synapse Upload Tools",
     url='https://github.com/informatics-isi-edu/fishspy/uploader',
     maintainer='USC Information Sciences Institute ISR Division',
     maintainer_email='misd-support@isi.edu',
@@ -19,7 +19,7 @@ setup(
     package_data={'uploader': ['conf/*.*']},
     entry_points={
         'console_scripts': [
-            'fishspy-upload = uploader.upload:main'
+            'synapse-upload = uploader.upload:main'
         ]
     },
     requires=[
