@@ -11,38 +11,10 @@ class SynapseUpload (DerivaUpload):
 
     def getAccessionInfo(file_path, asset_mapping):
         base_name = os.path.basename(file_path)
+        pattern = asset_mapping['file_pattern']
         file_type = asset_mapping['synapse_file_type']
+        query_url_template = asset_mapping['query_url_template']
 
-        _region_url_templ = '/attribute/I:=Zebrafish:Image/Zebrafish:Image%20Region/ID=%(ID)s/*,Subject:=I:Subject'
-
-        pattern, query_url_template, base_record_type = {
-            'behavior movie': (
-                '(?P<ID>[^.]+)[.]m4v$',
-                '/entity/Zebrafish:Behavior/ID=%(ID)s',
-                'Behavior'
-            ),
-            'spim image': (
-                '(?P<ID>[^.]+)[.]ome[.]tiff?$',
-                '/entity/Zebrafish:Image/ID=%(ID)s',
-                'Image',
-            ),
-            'cropped image': (
-                '(?P<ID>[^.]+)[.]ome[.]tiff?$',
-                _region_url_templ,
-                'Image%20Region'
-            ),
-            'synapse list': (
-                '(?P<ID>[^-._]+)[-._](segments|synapses)[.]csv$',
-                _region_url_templ,
-                'Image%20Region'
-            ),
-            'nucleus list': (
-                '(?P<ID>[^-._]+)[-._]nuclei[.]csv$',
-                _region_url_templ,
-                'Image%20Region'
-            ),
-        }[file_type]
-        
         m = re.match(pattern, base_name)
         if m:
             results = self.catalog.get(query_url_template % m.groupdict()).json()
@@ -55,18 +27,12 @@ class SynapseUpload (DerivaUpload):
 
     def getUpdateInfo(accession_info, url, asset_mapping):
         file_type = asset_mapping['synapse_file_type']
-        url_column = {
-            'behavior movie': 'Raw URL',
-            'spim image': 'URL',
-            'cropped image': None,
-            'synapse list': 'Segments URL',
-            'nucleus list': 'Segments URL',
-        }[file_type]
-
+        url_column = asset_mapping['url_tracking_column']
         original = {'ID': accession_info['ID']}
         update = {}
 
         if url_column:
+            original[url_column] = accession_info[url_column]
             if accession_info[url_column]:
                 if accession_info[url_column] == url:
                     pass
@@ -85,8 +51,9 @@ class SynapseUpload (DerivaUpload):
         :param callback:
         :return:
         """
+        schema_name, table_name = asset_mapping['base_record_type']
         base_name = os.path.basename(file_path)
-        base_record_type, accession_info = self.getAccessionInfo(file_path, asset_mapping)
+        accession_info = self.getAccessionInfo(file_path, asset_mapping)
         object_name = '/hatrac/Zf/%s/%s' % (accession_info['Subject'], base_name])
         content_type = self.guessContentType(file_path)
 
@@ -103,7 +70,7 @@ class SynapseUpload (DerivaUpload):
         original_info, update_info = self.getUpdateInfo(accession_info, url, asset_mapping)
         
         return self._catalogRecordUpdate(
-            'Zebrafish:%s' % base_record_type,
+            '%s:%s' % (urlquote(schema_name), urlquote(table_name),
             original_info,
             update_info
         )
