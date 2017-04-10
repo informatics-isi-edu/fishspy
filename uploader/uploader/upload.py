@@ -79,10 +79,10 @@ def upload(path):
     init_logging(level=logging.INFO)
     config = read_config(resource_path(os.path.join('conf', 'config.json')))
     credentials = read_credentials(resource_path(os.path.join('conf', 'credentials.json')))
-    fs_upload = FishspyUpload(config, credentials)
-    if fs_upload.scanDirectory(path, False):
-        fs_upload.uploadFiles()
-    fs_upload.cleanup()
+    syn_upload = SynapseUpload(config, credentials)
+    if syn_upload.scanDirectory(path, False):
+        syn_upload.uploadFiles()
+    syn_upload.cleanup()
 
 if __name__ == '__main__':
     sys.exit(upload(sys.argv[1]))
