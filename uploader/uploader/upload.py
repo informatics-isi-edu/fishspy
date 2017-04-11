@@ -1,45 +1,47 @@
 import os
+import re
 import sys
 import logging
-from deriva_common import read_config, read_credentials, resource_path, init_logging, format_exception, urlquote
+from deriva_common import read_config, read_credential, resource_path, init_logging, format_exception, urlquote
+from deriva_common.base_cli import BaseCLI
 from deriva_io.deriva_upload import DerivaUpload
 
-class SynapseUpload (DerivaUpload):
 
+class SynapseUpload(DerivaUpload):
     def __init__(self, config, credentials):
         DerivaUpload.__init__(self, config, credentials)
 
-    def getAccessionInfo(file_path, asset_mapping):
+    def getAccessionInfo(self, file_path, asset_mapping):
         base_name = os.path.basename(file_path)
         pattern = asset_mapping['file_pattern']
         file_type = asset_mapping['synapse_file_type']
         query_url_template = asset_mapping['query_url_template']
-
+        base_record_type = asset_mapping['base_record_type']
         m = re.match(pattern, base_name)
         if m:
             results = self.catalog.get(query_url_template % m.groupdict()).json()
             if results:
-                return (base_record_type, row[0])
+                return base_record_type, results[0]
             else:
-                raise ValueError('File "%s" does not match an existing %s record in the catalog.' % (base_name, file_type))
+                raise ValueError('File "%s" does not match an existing %s record in the catalog.'
+                                 % (base_name, file_type))
         else:
             raise ValueError('File "%s" does not look like a %s file name.' % (base_name, file_type))
 
-    def getUpdateInfo(accession_info, url, asset_mapping):
+    @staticmethod
+    def getUpdateInfo(accession, url, asset_mapping):
         file_type = asset_mapping['synapse_file_type']
         url_column = asset_mapping['url_tracking_column']
+        accession_info = accession[1]
         original = {'ID': accession_info['ID']}
-        update = {}
+        update = original.copy()
 
         if url_column:
             original[url_column] = accession_info[url_column]
             if accession_info[url_column]:
-                if accession_info[url_column] == url:
-                    pass
-                else:
+                if accession_info[url_column] != url:
                     raise ValueError('A different file already exists for accession ID %s.' % accession_info['ID'])
-            else:
-                update[url_column] = url
+            update[url_column] = url
 
         return original, update
         
@@ -54,7 +56,7 @@ class SynapseUpload (DerivaUpload):
         schema_name, table_name = asset_mapping['base_record_type']
         base_name = os.path.basename(file_path)
         accession_info = self.getAccessionInfo(file_path, asset_mapping)
-        object_name = '/hatrac/Zf/%s/%s' % (accession_info['Subject'], base_name])
+        object_name = '/hatrac/Zf/%s/%s' % (accession_info[1]["Subject"], base_name)
         content_type = self.guessContentType(file_path)
 
         url = self.store.put_loc(
@@ -68,21 +70,23 @@ class SynapseUpload (DerivaUpload):
         )
 
         original_info, update_info = self.getUpdateInfo(accession_info, url, asset_mapping)
-        
-        return self._catalogRecordUpdate(
-            '%s:%s' % (urlquote(schema_name), urlquote(table_name),
-            original_info,
-            update_info
-        )
+        if original_info != update_info:
+            return self._catalogRecordUpdate(
+                '%s:%s' % (urlquote(schema_name), urlquote(table_name)),
+                original_info,
+                update_info
+            )
 
-def upload(path):
-    init_logging(level=logging.INFO)
-    config = read_config(resource_path(os.path.join('conf', 'config.json')))
-    credentials = read_credentials(resource_path(os.path.join('conf', 'credentials.json')))
-    syn_upload = SynapseUpload(config, credentials)
-    if syn_upload.scanDirectory(path, False):
-        syn_upload.uploadFiles()
-    syn_upload.cleanup()
+    @staticmethod
+    def upload(data_path, config_file=None, credential_file=None):
+        if not (config_file and os.path.isfile(config_file)):
+            config_file = os.path.join(resource_path('conf'), 'config.json')
+        config = read_config(config_file)
+        if not (credential_file and os.path.isfile(credential_file)):
+            credential_file = os.path.join(resource_path('conf'), 'credentials.json')
+        credentials = read_credential(credential_file)
 
-if __name__ == '__main__':
-    sys.exit(upload(sys.argv[1]))
+        synapse_upload = SynapseUpload(config, credentials)
+        synapse_upload.scanDirectory(data_path, False)
+        synapse_upload.uploadFiles()
+        synapse_upload.cleanup()

@@ -9,7 +9,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="synapse_upload",
+    name="synapse-upload",
     description="Synapse Upload Tools",
     url='https://github.com/informatics-isi-edu/fishspy/uploader',
     maintainer='USC Information Sciences Institute ISR Division',
@@ -19,7 +19,7 @@ setup(
     package_data={'uploader': ['conf/*.*']},
     entry_points={
         'console_scripts': [
-            'synapse-upload = uploader.upload:main'
+            'synapse-upload = uploader.__main__:main'
         ]
     },
     requires=[
