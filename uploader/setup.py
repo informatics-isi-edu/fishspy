@@ -19,7 +19,7 @@ setup(
     package_data={'uploader': ['conf/*.*']},
     entry_points={
         'console_scripts': [
-            'synapse-upload = uploader.__main__:main'
+            'synapse-upload = uploader.upload:main'
         ]
     },
     requires=[
