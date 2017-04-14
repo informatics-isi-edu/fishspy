@@ -81,9 +81,7 @@ class SynapseUpload(DerivaUpload):
         if not (config_file and os.path.isfile(config_file)):
             config_file = os.path.join(resource_path('conf'), 'config.json')
         config = read_config(config_file)
-        if not (credential_file and os.path.isfile(credential_file)):
-            credential_file = os.path.join(resource_path('conf'), 'credentials.json')
-        credentials = read_credential(credential_file)
+        credentials = read_credential(credential_file, create_default=True)
 
         synapse_upload = SynapseUpload(config, credentials)
         synapse_upload.scanDirectory(data_path, False)
@@ -94,8 +92,7 @@ class SynapseUpload(DerivaUpload):
 def main():
     cli = BaseCLI("Synapse data upload utility",
                   "For more information see: https://github.com/informatics-isi-edu/fishspy/uploader")
-    cli.parser.add_argument(
-        "--data-path", metavar="<path>", required=True, help="Path to data directory")
+    cli.parser.add_argument('data_path', nargs="?", metavar="<path>", help="Path to data directory")
     args = cli.parse_cli()
 
     try:
