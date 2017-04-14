@@ -100,6 +100,8 @@ def main():
     except Exception as e:
         sys.stderr.write(format_exception(e))
         return 1
+    finally:
+        sys.stderr.write('\n\n')
     return 0
 
 if __name__ == '__main__':
