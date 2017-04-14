@@ -6,7 +6,7 @@
   },
   "asset_mappings": [
     {
-      "file_pattern": "(?P<ID>Bhv[^.]+)[.]m4v$",
+      "file_pattern": "^(.*/)?(?P<ID>Bhv[^.]+)[.]m4v$",
       "ext_pattern": ".*[.](?P<ext>m4v)$",
       "checksum_types": [
         "md5"
@@ -20,7 +20,7 @@
       "url_tracking_column": "Raw URL"
     },
     {
-      "file_pattern": "(?P<ID>Img[^.]+)[.]ome[.]tiff?$",
+      "file_pattern": "^(.*/)?(?P<ID>Img[^.]+)[.]ome[.]tiff?$",
       "ext_pattern": ".*[.](?P<ext>ome[.]tiff?)$",
       "checksum_types": [
         "md5"
@@ -34,13 +34,13 @@
       "url_tracking_column": "URL"
     },
     {
-      "file_pattern": "(?P<ID>CropImg[^.]+)[.]ome[.]tiff?$",
+      "file_pattern": "^(.*/)?(?P<ID>CropImg[^.]+)[.]ome[.]tiff?$",
       "ext_pattern": ".*[.](?P<ext>ome[.]tiff?)$",
       "checksum_types": [
         "md5"
       ],
       "synapse_file_type": "cropped image",
-      "query_url_template": "/attribute/I:=Zebrafish:Image/Zebrafish:Image Region/ID=%(ID)s/*,Subject:=I:Subject",
+      "query_url_template": "/attribute/I:=Zebrafish:Image/Zebrafish:Image%%20Region/ID=%(ID)s/*,Subject:=I:Subject",
       "base_record_type": [
         "Zebrafish",
         "Image Region"
@@ -48,13 +48,13 @@
       "url_tracking_column": null
     },
     {
-      "file_pattern": "(?P<ID>(Roi|Crop|Syn)[^-._]+)[-._](segments|synapses)[.]csv$",
+      "file_pattern": "^(.*/)?(?P<ID>(Roi|Crop|Syn)[^-._]+)[-._](segments|synapses)[.]csv$",
       "ext_pattern": ".*[.](?P<ext>csv)$",
       "checksum_types": [
         "md5"
       ],
       "synapse_file_type": "synapse list",
-      "query_url_template": "/attribute/I:=Zebrafish:Image/Zebrafish:Image Region/ID=%(ID)s/*,Subject:=I:Subject",
+      "query_url_template": "/attribute/I:=Zebrafish:Image/Zebrafish:Image%%20Region/ID=%(ID)s/*,Subject:=I:Subject",
       "base_record_type": [
         "Zebrafish",
         "Image Region"
@@ -62,13 +62,13 @@
       "url_tracking_column": "Segments URL"
     },
     {
-      "file_pattern": "(?P<ID>(Roi|Crop|Nuc)[^-._]+)[-._]nuclei[.]csv$",
+      "file_pattern": "^(.*/)?(?P<ID>(Roi|Crop|Nuc)[^-._]+)[-._]nuclei[.]csv$",
       "ext_pattern": ".*[.](?P<ext>csv)$",
       "checksum_types": [
         "md5"
       ],
       "synapse_file_type": "nucleus list",
-      "query_url_template": "/attribute/I:=Zebrafish:Image/Zebrafish:Image Region/ID=%(ID)s/*,Subject:=I:Subject",
+      "query_url_template": "/attribute/I:=Zebrafish:Image/Zebrafish:Image%%20Region/ID=%(ID)s/*,Subject:=I:Subject",
       "base_record_type": [
         "Zebrafish",
         "Image Region"
