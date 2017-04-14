@@ -6,7 +6,6 @@ block_cipher = None
 a = Analysis(['uploader\\upload.py'],
              pathex=[''],
              binaries=None,
-             datas=[('conf', 'conf')],
              hiddenimports=[],
              hookspath=[],
              runtime_hooks=[],

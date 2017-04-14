@@ -1,4 +1,4 @@
-{
+DEFAULT_CONFIG = {
   "server": {
     "protocol": "https",
     "host": "synapse-dev.isrd.isi.edu",
@@ -45,7 +45,7 @@
         "Zebrafish",
         "Image Region"
       ],
-      "url_tracking_column": null
+      "url_tracking_column": None
     },
     {
       "file_pattern": "^(.*[/\\\\])?(?P<ID>(Roi|Crop|Syn)[^-._]+)[-._](segments|synapses)[.]csv$",

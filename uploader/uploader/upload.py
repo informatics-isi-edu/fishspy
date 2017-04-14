@@ -4,6 +4,7 @@ import sys
 from deriva_common import read_config, read_credential, resource_path, init_logging, format_exception, urlquote
 from deriva_common.base_cli import BaseCLI
 from deriva_io.deriva_upload import DerivaUpload
+from uploader.config import DEFAULT_CONFIG
 
 
 class SynapseUpload(DerivaUpload):
@@ -79,8 +80,9 @@ class SynapseUpload(DerivaUpload):
     @staticmethod
     def upload(data_path, config_file=None, credential_file=None):
         if not (config_file and os.path.isfile(config_file)):
-            config_file = os.path.join(resource_path('conf'), 'config.json')
-        config = read_config(config_file)
+            config_file = os.path.join(os.path.expanduser(
+                os.path.normpath("~/.deriva/synapse/synapse-upload")), 'config.json')
+        config = read_config(config_file, create_default=True, default=DEFAULT_CONFIG)
         credentials = read_credential(credential_file, create_default=True)
 
         synapse_upload = SynapseUpload(config, credentials)
@@ -92,7 +94,7 @@ class SynapseUpload(DerivaUpload):
 def main():
     cli = BaseCLI("Synapse data upload utility",
                   "For more information see: https://github.com/informatics-isi-edu/fishspy/uploader")
-    cli.parser.add_argument('data_path', nargs="?", metavar="<path>", help="Path to data directory")
+    cli.parser.add_argument('data_path', nargs="?", default=".", metavar="<path>", help="Path to data directory")
     args = cli.parse_cli()
 
     try:

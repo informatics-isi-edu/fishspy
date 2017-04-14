@@ -16,7 +16,6 @@ setup(
     maintainer_email='misd-support@isi.edu',
     version="0.1.0",
     packages=find_packages(),
-    package_data={'uploader': ['conf/*.*']},
     entry_points={
         'console_scripts': [
             'synapse-upload = uploader.upload:main'
