@@ -94,8 +94,12 @@ class SynapseUpload(DerivaUpload):
 def main():
     cli = BaseCLI("Synapse data upload utility",
                   "For more information see: https://github.com/informatics-isi-edu/fishspy/uploader")
-    cli.parser.add_argument('data_path', nargs="?", default=".", metavar="<path>", help="Path to data directory")
+    cli.parser.add_argument('data_path', nargs="?", metavar="<dir>", help="Path to the input directory")
     args = cli.parse_cli()
+    if args.data_path is None:
+        print("\nError: Input directory not specified.\n")
+        cli.parser.print_usage()
+        return 1
 
     try:
         SynapseUpload.upload(os.path.abspath(args.data_path), args.config_file, args.credential_file)
