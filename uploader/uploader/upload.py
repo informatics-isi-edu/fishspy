@@ -97,10 +97,11 @@ class SynapseUpload(DerivaUpload):
             config_file = os.path.join(os.path.expanduser(
                 os.path.normpath("~/.deriva/synapse/synapse-upload")), 'config.json')
         config = read_config(config_file, create_default=True, default=DEFAULT_CONFIG)
-        credential = read_credential(credential_file, create_default=True)
+        credential = read_credential(credential_file, create_default=False) if credential_file else None
 
         synapse_upload = SynapseUpload(config, credential)
-        upload_app.launch(synapse_upload, config_file, credential_file=None, window_title="Synapse Data Upload Utility")
+        upload_app.launch(
+            synapse_upload, config_file, credential_file=credential_file, window_title="Synapse Data Upload Utility")
 
 
 def main():
