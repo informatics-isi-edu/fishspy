@@ -1,7 +1,7 @@
 DEFAULT_CONFIG = {
   "server": {
     "protocol": "https",
-    "host": "synapse-dev.isrd.isi.edu",
+    "host": "",
     "catalog_id": 1
   },
   "asset_mappings": [
