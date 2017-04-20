@@ -1,7 +1,7 @@
 import os
 import re
 import sys
-from deriva_common import read_config, read_credential, resource_path, init_logging, format_exception, urlquote
+from deriva_common import read_config, read_credential, format_exception, urlquote
 from deriva_common.base_cli import BaseCLI
 from deriva_io.deriva_upload import DerivaUpload
 from deriva_qt.upload_gui import upload_app
@@ -11,6 +11,10 @@ from uploader.config import DEFAULT_CONFIG
 class SynapseUpload(DerivaUpload):
     def __init__(self, config, credentials):
         DerivaUpload.__init__(self, config, credentials)
+
+    @staticmethod
+    def getDefaultConfigFilePath():
+        return os.path.join(os.path.expanduser(os.path.normpath("~/.deriva/synapse/synapse-upload")), 'config.json')
 
     def getAccessionInfo(self, file_path, asset_mapping):
         base_name = os.path.basename(file_path)
@@ -31,7 +35,6 @@ class SynapseUpload(DerivaUpload):
 
     @staticmethod
     def getUpdateInfo(accession, url, asset_mapping):
-        file_type = asset_mapping['synapse_file_type']
         url_column = asset_mapping['url_tracking_column']
         accession_info = accession[1]
         original = {'ID': accession_info['ID']}
@@ -79,23 +82,9 @@ class SynapseUpload(DerivaUpload):
             )
 
     @staticmethod
-    def upload(data_path, config_file=None, credential_file=None):
+    def upload(config_file=None, credential_file=None):
         if not (config_file and os.path.isfile(config_file)):
-            config_file = os.path.join(os.path.expanduser(
-                os.path.normpath("~/.deriva/synapse/synapse-upload")), 'config.json')
-        config = read_config(config_file, create_default=True, default=DEFAULT_CONFIG)
-        credential = read_credential(credential_file, create_default=True)
-
-        synapse_upload = SynapseUpload(config, credential)
-        synapse_upload.scanDirectory(data_path, False)
-        synapse_upload.uploadFiles()
-        synapse_upload.cleanup()
-
-    @staticmethod
-    def upload_gui(config_file=None, credential_file=None):
-        if not (config_file and os.path.isfile(config_file)):
-            config_file = os.path.join(os.path.expanduser(
-                os.path.normpath("~/.deriva/synapse/synapse-upload")), 'config.json')
+            config_file = SynapseUpload.getDefaultConfigFilePath()
         config = read_config(config_file, create_default=True, default=DEFAULT_CONFIG)
         credential = read_credential(credential_file, create_default=False) if credential_file else None
 
@@ -107,15 +96,9 @@ class SynapseUpload(DerivaUpload):
 def main():
     cli = BaseCLI("Synapse data upload utility",
                   "For more information see: https://github.com/informatics-isi-edu/fishspy/uploader")
-    cli.parser.add_argument('data_path', nargs="?", metavar="<dir>", help="Path to the input directory")
     args = cli.parse_cli()
-    if args.data_path is None:
-        print("\nError: Input directory not specified.\n")
-        cli.parser.print_usage()
-        return 1
-
     try:
-        SynapseUpload.upload(os.path.abspath(args.data_path), args.config_file, args.credential_file)
+        SynapseUpload.upload(args.config_file, args.credential_file)
     except Exception as e:
         sys.stderr.write(format_exception(e))
         return 1
