@@ -1,16 +1,26 @@
 import os
 import re
 import sys
-from deriva_common import read_config, read_credential, format_exception, urlquote
-from deriva_common.base_cli import BaseCLI
+from deriva_common import urlquote
 from deriva_io.deriva_upload import DerivaUpload
-from deriva_qt.upload_gui import upload_app
-from uploader.config import DEFAULT_CONFIG
+from deriva_qt.upload_gui.upload_app import DerivaUploadGUI
+from synapse_upload.config import DEFAULT_CONFIG
+
+DESC = "Synapse Data Upload Utility"
+INFO = "For more information see: https://github.com/informatics-isi-edu/fishspy/uploader"
 
 
 class SynapseUpload(DerivaUpload):
     def __init__(self, config, credentials):
         DerivaUpload.__init__(self, config, credentials)
+
+    @staticmethod
+    def getInstance(config=None, credentials=None):
+        return SynapseUpload(config, credentials)
+
+    @staticmethod
+    def getDefaultConfig():
+        return DEFAULT_CONFIG
 
     @staticmethod
     def getDefaultConfigFilePath():
@@ -81,30 +91,10 @@ class SynapseUpload(DerivaUpload):
                 update_info
             )
 
-    @staticmethod
-    def upload(config_file=None, credential_file=None):
-        if not (config_file and os.path.isfile(config_file)):
-            config_file = SynapseUpload.getDefaultConfigFilePath()
-        config = read_config(config_file, create_default=True, default=DEFAULT_CONFIG)
-        credential = read_credential(credential_file, create_default=False) if credential_file else None
-
-        synapse_upload = SynapseUpload(config, credential)
-        upload_app.launch(
-            synapse_upload, config_file, credential_file=credential_file, window_title="Synapse Data Upload Utility")
-
 
 def main():
-    cli = BaseCLI("Synapse data upload utility",
-                  "For more information see: https://github.com/informatics-isi-edu/fishspy/uploader")
-    args = cli.parse_cli()
-    try:
-        SynapseUpload.upload(args.config_file, args.credential_file)
-    except Exception as e:
-        sys.stderr.write(format_exception(e))
-        return 1
-    finally:
-        sys.stderr.write('\n\n')
-    return 0
+    gui = DerivaUploadGUI(SynapseUpload, DESC, INFO)
+    gui.main()
 
 if __name__ == '__main__':
     sys.exit(main())

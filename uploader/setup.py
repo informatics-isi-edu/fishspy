@@ -18,7 +18,7 @@ setup(
     packages=find_packages(),
     entry_points={
         'console_scripts': [
-            'synapse-upload = uploader.upload:main'
+            'synapse-upload = synapse_upload.upload:main'
         ]
     },
     requires=[
