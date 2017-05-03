@@ -3,8 +3,8 @@
 block_cipher = None
 
 
-a = Analysis(['uploader\\upload.py'],
-             pathex=[''],
+a = Analysis(['synapse_upload/upload.py'],
+             pathex=[],
              binaries=None,
              hiddenimports=[],
              hookspath=[],
@@ -21,15 +21,8 @@ exe = EXE(pyz,
           a.binaries,
           a.zipfiles,
           a.datas,
-          name='synapse-uploader',
+          name='synapse-upload',
           debug=False,
           strip=False,
           upx=True,
-          console=True )
-
-# for MacOS, if needed
-app = BUNDLE(exe,
-         name='synapse-uploader.app',
-         icon=None,
-         bundle_identifier=None,
-         info_plist={'NSHighResolutionCapable': 'True'})
+          console=False)

@@ -93,7 +93,7 @@ class SynapseUpload(DerivaUpload):
 
 
 def main():
-    gui = DerivaUploadGUI(SynapseUpload, DESC, INFO)
+    gui = DerivaUploadGUI(SynapseUpload, DESC, INFO, cookie_persistence=False)
     gui.main()
 
 if __name__ == '__main__':
