@@ -110,8 +110,10 @@ def analyze_movie(row, debug_video=False):
     sys.stderr.write('Got scope parameters: %r\n' % analysis_params)
     if type(analysis_params) is dict:
         for k, v in analysis_params.items():
-            if k in {'FISHSPY_CROP', 'FISHSPY_CONSTRAST', 'FISHSPY_GAMMA'}:
+            if k in {'FISHSPY_CROP', 'FISHSPY_CONTRAST', 'FISHSPY_GAMMA'}:
                 env[k] = '%s' % v
+            else:
+                raise WorkerRuntimeError('Unsupported analysis parameter %r=%r' % (k, v))
     elif analysis_params is not None:
         raise WorkerRuntimeError('Analysis parameters %r are not an object!' % analysis_params)
 
@@ -194,7 +196,7 @@ def run_row_job(row):
     
     sys.stderr.write('Claimed job %s.\n' % row['ID'])
 
-    working_dir = tempfile.mkdtemp()
+    working_dir = tempfile.mkdtemp(dir="/var/tmp")
     os.chdir(working_dir)
     sys.stderr.write('Using working directory %s.\n' % working_dir)
 
