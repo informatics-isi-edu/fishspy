@@ -328,7 +328,7 @@ def look_for_work():
     for row, claim in batch:
         try:
             run_row_job(row)
-        except Exception, e:
+        except Exception as e:
             # TODO: eat some exceptions and return True to continue?
             catalog.put(status_update_url, json=[{'ID': row['ID'], 'Status': "failed: %s" % e }])
             raise
