@@ -2,7 +2,7 @@
 
 import json
 import pika
-from deriva_common import PollingErmrestCatalog, HatracStore
+from deriva_common import PollingErmrestCatalog, HatracStore, urlquote
 import os
 import re
 import sys
@@ -15,7 +15,6 @@ import atexit
 import shutil
 import tempfile
 import subprocess
-import urllib
 
 # server to talk to... defaults to our own FQDN
 servername = os.getenv('FISHSPY_SERVER', platform.uname()[1])
@@ -103,7 +102,7 @@ def analyze_movie(row, debug_video=False):
 
     # allow supported parameters to be set per instrument
     r = catalog.get(
-        '/entity/Synapse:FScope/ID=%s' % urllib.quote(row['FScope']),
+        '/entity/Synapse:FScope/ID=%s' % urlquote(row['FScope']),
     )
     r.raise_for_status()
     analysis_params = r.json()[0]['Analysis Parameters']
@@ -240,7 +239,7 @@ def run_row_job(row):
             # record analysis results in ermrest
             catalog.put(
                 '/attributegroup/Zebrafish:Behavior/ID;%s' % ','.join([
-                    urllib.quote(col, safe='')
+                    urlquote(col, safe='')
                     for col in updated_row.keys()
                     if col != 'ID'
                 ]),
@@ -277,7 +276,7 @@ def run_row_job(row):
         # record plot result in ermrest
         catalog.put(
             '/attributegroup/Zebrafish:Behavior/ID;%s' % ','.join([
-                urllib.quote(col, safe='')
+                urlquote(col, safe='')
                 for col in updated_row.keys()
                 if col != 'ID'
             ]),
