@@ -4,7 +4,6 @@ import sys
 from deriva_common import urlquote
 from deriva_io.deriva_upload import DerivaUpload
 from deriva_qt.upload_gui.upload_app import DerivaUploadGUI
-from synapse_upload.config import DEFAULT_CONFIG
 
 DESC = "Synapse Data Upload Utility"
 INFO = "For more information see: https://github.com/informatics-isi-edu/fishspy/uploader"
@@ -19,11 +18,7 @@ class SynapseUpload(DerivaUpload):
         return SynapseUpload(config, credentials)
 
     @staticmethod
-    def getDefaultConfig():
-        return DEFAULT_CONFIG
-
-    @staticmethod
-    def getDefaultConfigFilePath():
+    def getDeployedConfigFilePath():
         return os.path.join(os.path.expanduser(os.path.normpath("~/.deriva/synapse/synapse-upload")), 'config.json')
 
     def getAccessionInfo(self, file_path, asset_mapping):

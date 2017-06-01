@@ -5,7 +5,7 @@
 
 """ Installation script for Synapse Upload
 """
-
+import os
 from setuptools import setup, find_packages
 
 setup(
@@ -16,6 +16,9 @@ setup(
     maintainer_email='misd-support@isi.edu',
     version="0.1.0",
     packages=find_packages(),
+    package_data={'synapse-upload': ['conf/config.json']},
+    data_files=[(os.path.expanduser(os.path.normpath(
+                "~/.deriva/synapse/synapse-upload")), ['conf/config.json'])],
     entry_points={
         'console_scripts': [
             'synapse-upload = synapse_upload.upload:main'

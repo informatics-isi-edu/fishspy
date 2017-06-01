@@ -1,9 +1,10 @@
-DEFAULT_CONFIG = {
+{
   "server": {
     "protocol": "https",
-    "host": "",
-    "catalog_id": 1
+    "host": @@HOST@@,
+    "config_path": "/hatrac/Util/synapse-upload/config.json"
   },
+  "catalog_id": 1,
   "asset_mappings": [
     {
       "file_pattern": "^(.*[/\\\\])?(?P<ID>Bhv[^.]+)[.]m4v$",
@@ -45,7 +46,7 @@ DEFAULT_CONFIG = {
         "Zebrafish",
         "Image Region"
       ],
-      "url_tracking_column": None
+      "url_tracking_column": null
     },
     {
       "file_pattern": "^(.*[/\\\\])?(?P<ID>(Roi|Crop|Syn)[^-._]+)[-._](segments|synapses)[.]csv$",
