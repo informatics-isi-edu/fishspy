@@ -1,7 +1,6 @@
 import os
-import re
 import sys
-from deriva_common import urlquote
+import logging
 from deriva_io.deriva_upload import DerivaUpload
 from deriva_qt.upload_gui.upload_app import DerivaUploadGUI
 
@@ -10,6 +9,8 @@ INFO = "For more information see: https://github.com/informatics-isi-edu/fishspy
 
 
 class SynapseUpload(DerivaUpload):
+    config_dir = "~/.deriva/synapse/synapse-upload"
+
     def __init__(self, config, credentials):
         DerivaUpload.__init__(self, config, credentials)
 
@@ -17,19 +18,21 @@ class SynapseUpload(DerivaUpload):
     def getInstance(config=None, credentials=None):
         return SynapseUpload(config, credentials)
 
-    @staticmethod
-    def getDeployedConfigFilePath():
-        return os.path.join(os.path.expanduser(os.path.normpath("~/.deriva/synapse/synapse-upload")), 'config.json')
+    def getDeployedConfigFilePath(self):
+        return os.path.join(os.path.expanduser(
+            os.path.normpath(self.config_dir)), DerivaUpload.DefaultConfigFileName)
 
-    def getAccessionInfo(self, file_path, asset_mapping):
-        base_name = os.path.basename(file_path)
-        pattern = asset_mapping['file_pattern']
+    def getDeployedTransferStateFilePath(self):
+        return os.path.join(os.path.expanduser(
+            os.path.normpath(self.config_dir)), DerivaUpload.DefaultTransferStateFileName)
+
+    def getAccessionInfo(self, file_path, asset_mapping, match_groupdict):
+        base_name = self.getFileDisplayName(file_path)
         file_type = asset_mapping['synapse_file_type']
         query_url_template = asset_mapping['query_url_template']
         base_record_type = asset_mapping['base_record_type']
-        m = re.match(pattern, base_name)
-        if m:
-            results = self.catalog.get(query_url_template % m.groupdict()).json()
+        if match_groupdict:
+            results = self.catalog.get(query_url_template % match_groupdict).json()
             if results:
                 return base_record_type, results[0]
             else:
@@ -54,37 +57,34 @@ class SynapseUpload(DerivaUpload):
 
         return original, update
         
-    def uploadFile(self, file_path, asset_mapping, callback=None):
+    def uploadFile(self, file_path, asset_mapping, match_groupdict, callback=None):
         """
 
         :param file_path:
         :param asset_mapping:
+        :param match_groupdict:
         :param callback:
         :return:
         """
-        schema_name, table_name = asset_mapping['base_record_type']
-        base_name = os.path.basename(file_path)
-        accession_info = self.getAccessionInfo(file_path, asset_mapping)
+        base_name = self.getFileDisplayName(file_path)
+        logging.info("Processing file: [%s]." % base_name)
+        accession_info = self.getAccessionInfo(file_path, asset_mapping, match_groupdict)
         object_name = '/hatrac/Zf/%s/%s' % (accession_info[1]["Subject"], base_name)
         content_type = self.guessContentType(file_path)
 
-        url = self.store.put_loc(
+        url = self._hatracUpload(
             object_name,
             file_path,
-            {"Content-Type": content_type},
+            content_type=content_type,
             chunked=True,
             create_parents=True,
             allow_versioning=False,
-            callback=callback
-        )
+            callback=callback)
 
         original_info, update_info = self.getUpdateInfo(accession_info, url, asset_mapping)
         if original_info != update_info:
-            return self._catalogRecordUpdate(
-                '%s:%s' % (urlquote(schema_name), urlquote(table_name)),
-                original_info,
-                update_info
-            )
+            logging.info("Updating catalog for file: [%s]." % base_name)
+            self._catalogRecordUpdate(self.getCatalogTable(asset_mapping), original_info, update_info)
 
 
 def main():
