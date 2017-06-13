@@ -109,7 +109,7 @@ def analyze_movie(row, debug_video=False):
     sys.stderr.write('Got scope parameters: %r\n' % analysis_params)
     if type(analysis_params) is dict:
         for k, v in analysis_params.items():
-            if k in {'FISHSPY_CROP', 'FISHSPY_CONTRAST', 'FISHSPY_GAMMA'}:
+            if k in {'FISHSPY_CROP', 'FISHSPY_CONTRAST', 'FISHSPY_GAMMA', 'DEBUG_MOVIE'}:
                 env[k] = '%s' % v
             else:
                 raise WorkerRuntimeError('Unsupported analysis parameter %r=%r' % (k, v))
