@@ -27,4 +27,5 @@ exe = EXE(pyz,
           strip=False,
           upx=False,
           debug=env.get("DEBUG", False),
-          console=env.get("DEBUG", False))
+          console=env.get("DEBUG", False),
+          icon='../../deriva-qt/deriva_qt/upload_gui/images/upload.ico')

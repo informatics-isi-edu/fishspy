@@ -11,20 +11,37 @@ INFO = "For more information see: https://github.com/informatics-isi-edu/fishspy
 class SynapseUpload(DerivaUpload):
     config_dir = "~/.deriva/synapse/synapse-upload"
 
-    def __init__(self, config, credentials):
-        DerivaUpload.__init__(self, config, credentials)
+    def __init__(self, config_file=None, credential_file=None, server=None):
+        DerivaUpload.__init__(self, config_file, credential_file, server)
 
-    @staticmethod
-    def getInstance(config=None, credentials=None):
-        return SynapseUpload(config, credentials)
+    @classmethod
+    def getVersion(cls):
+        return "synapse-20170615"
 
-    def getDeployedConfigFilePath(self):
-        return os.path.join(os.path.expanduser(
-            os.path.normpath(self.config_dir)), DerivaUpload.DefaultConfigFileName)
+    @classmethod
+    def getServers(cls):
+        return [
+            {
+                "host": "synapse.isrd.isi.edu",
+                "config_path": "/hatrac/Util/synapse-upload/config.json",
+                "desc": "Synapse Production",
+                "default": True
+            },
+            {
+                "host": "synapse-staging.isrd.isi.edu",
+                "config_path": "/hatrac/Util/synapse-upload/config.json",
+                "desc": "Synapse Staging"
+            },
+            {
+                "host": "synapse-dev.isrd.isi.edu",
+                "config_path": "/hatrac/Util/synapse-upload/config.json",
+                "desc": "Synapse Development"
+            }
+          ]
 
-    def getDeployedTransferStateFilePath(self):
-        return os.path.join(os.path.expanduser(
-            os.path.normpath(self.config_dir)), DerivaUpload.DefaultTransferStateFileName)
+    @classmethod
+    def getDeployedConfigPath(cls):
+        return os.path.expanduser(os.path.normpath(cls.config_dir))
 
     def getAccessionInfo(self, file_path, asset_mapping, match_groupdict):
         base_name = self.getFileDisplayName(file_path)

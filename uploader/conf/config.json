@@ -1,9 +1,6 @@
 {
-  "server": {
-    "protocol": "https",
-    "host": @@HOST@@,
-    "config_path": "/hatrac/Util/synapse-upload/config.json"
-  },
+  "version_compatibility": [[">=synapse-20170615"]],
+  "version_update_url": "https://github.com/informatics-isi-edu/fishspy/releases",
   "catalog_id": 1,
   "asset_mappings": [
     {

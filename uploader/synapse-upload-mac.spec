@@ -37,6 +37,7 @@ coll = COLLECT(exe,
 
 app = BUNDLE(coll,
          name='Synapse Upload.app',
+         icon='../../deriva-qt/deriva_qt/upload_gui/images/upload.icns',
          bundle_identifier='org.qt-project.Qt.QtWebEngineCore',
          info_plist={
             'CFBundleDisplayName': 'Synapse File Upload Utility',

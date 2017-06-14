@@ -5,8 +5,8 @@
 
 """ Installation script for Synapse Upload
 """
-import os
 from setuptools import setup, find_packages
+from synapse_upload.upload import SynapseUpload
 
 setup(
     name="synapse-upload",
@@ -14,7 +14,7 @@ setup(
     url='https://github.com/informatics-isi-edu/fishspy/uploader',
     maintainer='USC Information Sciences Institute ISR Division',
     maintainer_email='misd-support@isi.edu',
-    version="0.1.0",
+    version=SynapseUpload.getVersion(),
     packages=find_packages(),
     package_data={'synapse-upload': ['conf/config.json']},
     entry_points={
