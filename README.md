@@ -156,6 +156,10 @@ Environment variables can be set to modify the behavior of the
 - `DEBUG_MOVIE=true`: Enable output of `movie_debug.m4v` which
   includes each input frame with some additional markup illustrating
   the analysis.
+- `FISHSPY_LOGLEVEL=info`: Default log-level is `info` and also
+  includes continues statistics from `ffmpeg`. Other values `error` or
+  `fatal` will produce less verbose output useful in scripted
+  scenarios.
 - `FISHSPY_HDF5=true`: Enable output of `movie_frame_measures.hdf5`
   which includes more detailed positional information for each frame
   as a vector of mid-line positions for every vertical column of the
@@ -177,6 +181,32 @@ Environment variables can be set to modify the behavior of the
   that bin for plotting. This can be used, for example, to ignore the
   final bin if the tip of the tail loses tracking too often and fills
   the plot with red marks.
+- `FISHSPY_CROP=W:H:X:Y`: Crop the input video to a width of `W`,
+  height of `H` and with top-left corner offset `X` x `Y`. Defaults to
+  the whole input frame.
+- `FISHSPY_CONTRAST=1.0`: Adjust the input video contrast. Defaults to
+  `1.0` for no change to contrast.
+- `FISHSPY_GAMMA=1.0`: Adjust the input video gamma. Defaults to `1.0`
+  for no change to gamma.
+
+To analyze a video that has the fish poorly framed in an overly large
+field of view, supply crop parameters. For example, if you have a
+1280x1024 video where the fish is largely in the upper right quadrant,
+you might crop with `FISHSPY_CROP=640:480:440:160` to select a smaller
+640x480 field of view that is offset 440 pixels from the left edge and
+160 pixels from the top. The goal is to center the fish vertically and
+place its nose near the left edge and the tip of its tail near the
+right edge.
+
+To brighten a dark movie where the light-off period is very dark, you
+might try `FISHSPY_GAMMA=2.0 FISHSPY_CONTRAST=1.1` parameters. To
+preview the effects of these parameters, you can use a similar
+function in the `mplayer` movie player:
+
+    mplayer -vf eq2=2.0:1.1 movie.m4v
+	
+This applies the mplayer `eq2` video filter whose first parameter is
+gamma and second parameter is contrast.
 
 ## Help and Contact
 

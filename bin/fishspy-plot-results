@@ -8,8 +8,6 @@ import numpy as np
 import png
 import re
 
-frame_bin_size = 1
-
 pos_bin_cnt = 5
 
 def main(eventcsv, framecsv):
@@ -75,6 +73,25 @@ def main(eventcsv, framecsv):
     print "%d frames, %d position bins" % frame_bins.shape
     print "%d min/%d avg/%d max position spread" % (frame_bins.min(), frame_bins.mean(), frame_bins.max())
 
+    # HACK:  guess at FPS for reduction ratio... assume k * 20 fps  and approximate total duration
+    fps = int(frame_bins.shape[0] / 200000.0) * 20
+
+    print "guessed %s frames/sec" % fps
+
+    if CS_periods:
+        CS_periods = np.array(CS_periods, dtype=np.int32)
+        CS_cnt = CS_periods.shape[0]
+        CS_max_duration = (CS_periods[:,1] - CS_periods[:,0]).max()
+        CS_cycles = (CS_periods[1:,0] - CS_periods[0:-1,0])
+
+        print "%d periods, %d frames max duration, %f average cycle" % (CS_cnt, CS_max_duration, CS_cycles.mean())
+    else:
+        print "found 0 CS periods... control experiment?"
+        CS_periods = None
+        CS_cnt = 0
+        CS_max_duration = None
+        CS_cycles = None
+
     # zeros mean invalid measurements
     invalid = np.zeros(frame_bins.shape, dtype=np.bool)
 
@@ -103,9 +120,42 @@ def main(eventcsv, framecsv):
     
     print "%d min/%d avg/%d max delta position spread" % (frame_delta_bins.min(), frame_delta_bins.mean(), frame_delta_bins.max())
 
+    us_cs_ratio = float(os.getenv('FISHSPY_US_CS_RATIO', '0.2'))
+    trial_periods = np.zeros( (4,), dtype=np.int32 )
+    trial_periods[1:] = CS_cnt
+    trial_counts = os.getenv('FISHSPY_TRIAL_COUNTS')
+
+    if trial_counts:
+        trial_counts = trial_counts.split(',')
+        assert len(trial_counts) == 4, "FISHSPY_TRIAL_COUNTS must be comma-separated list of 4 decimal integers"
+        trial_counts = np.array([ int(x) for x in trial_counts ], dtype=np.int32)
+        for p in range(1,4):
+            trial_periods[p] = trial_counts[0:p].sum()
+
     # plot frame measures into period X time heat map
-    width = int(np.median(CS_cycles))
-    preroll = int((width - CS_max_duration) / 3.0)
+    if CS_periods is not None:
+        width = int(np.median(CS_cycles))
+        preroll = int((width - CS_max_duration) / 3.0)
+        draw_boundaries = True
+    else:
+        assert trial_counts is not None, "Must provide FISHSPY_TRIAL_COUNTS for control data lacking CS periods"
+
+        # mock up state to try to plot control data
+        CS_cnt = trial_counts.sum()
+        width = int(128 * fps)
+        preroll = int(width / 3.0)
+
+        # pretend we have uniform zero-width CS periods to fool the plot method
+        CS_periods = np.array(
+            [
+                ( i * width + preroll, i * width + preroll)
+                for i in range(CS_cnt)
+            ],
+            np.int32
+        )
+
+        draw_boundaries = False
+
     img = np.zeros((CS_cnt, pos_bin_cnt, width, 3), dtype=np.float32)
 
     print "%s plot space" % (img.shape,)
@@ -128,27 +178,34 @@ def main(eventcsv, framecsv):
 
         img[period,:,i0:i1,0] = (((invalid[d0:d1,:] - static_invalid[:,:]) > 0)* 8.0).transpose((1,0))
         img[period,:,i0:i1,1] = np.abs(frame_delta_bins[d0:d1,:]).transpose((1,0))
-        img[period,:,preroll,2] = 400
-        img[period,:,preroll + dL,2] = 400
 
-        if CS_periods[period, 1] > 0:
-            # show unconditioned stimulus marker too
-            US_offset = CS_periods[period,1] - CS_periods[period,0]
-            img[period,:,preroll + US_offset,2] = 400
-            img[period,:,preroll + US_offset,0] = 100
-            
+        if draw_boundaries:
+            img[period,:,preroll,2] = 400
+            img[period,:,preroll + dL,2] = 400
+
+            if CS_periods[period, 1] > 0:
+                # show unconditioned stimulus marker too
+                US_offset = CS_periods[period,1] - CS_periods[period,0]
+                img[period,:,preroll + US_offset,2] = 400
+                img[period,:,preroll + US_offset,0] = 100
+            elif (trial_periods[1] <= period < trial_periods[2]) or (trial_periods[3] <= period):
+                # show unconditioned stimulus marker too
+                img[period,:,preroll + int(dL * (1.0 - us_cs_ratio)),2] = 400
+                img[period,:,preroll + int(dL * (1.0 - us_cs_ratio)),0] = 100
+
     img = img.reshape((CS_cnt * pos_bin_cnt, img.shape[2], 3))
 
     img_full = img
 
-    x_reduce = 7
+    # 20 fps -> 7x reduce
+    x_reduce = int(img.shape[1] / 360.0)
     
     img = np.zeros( (img_full.shape[0], img_full.shape[1] / x_reduce, img_full.shape[2]), dtype=np.float32)
 
     for i in range(x_reduce):
         img[:,:,:] += img_full[:,slice(i,img.shape[1]*x_reduce,x_reduce),:]
     
-    print "%s plot image shape" % (img.shape,)
+    print "%s plot image shape using %d x-reduction" % (img.shape, x_reduce)
 
     #img *= 2.0
     img = np.sqrt(img) * 5.0

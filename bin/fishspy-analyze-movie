@@ -126,12 +126,53 @@ def main(moviename):
     assert len(frate) == 2
     frate = float(frate[0]) / float(frate[1])
     
-    frame_nbytes = shape[0] * shape[1] * 3
+    ffmpeg_loglevel = os.getenv('FISHSPY_LOGLEVEL', 'info')
     
+    video_filters = []
+    
+    crop = os.getenv('FISHSPY_CROP')
+    if crop:
+        try:
+            W, H, X, Y = map(lambda x: int(x), crop.split(':'))
+            video_filters += [
+                'crop=%s' % crop
+            ]
+            shape = H, W
+        except:
+            print "Could not decode crop parameter. Expected width:height:xoffset:yoffset with decimal numbers."
+            raise
+
+    frame_nbytes = shape[0] * shape[1] * 3
+
+    gamma = os.getenv('FISHSPY_GAMMA')
+    if gamma:
+        gamma = float(gamma)
+
+    contrast = os.getenv('FISHSPY_CONTRAST')
+    if contrast:
+        contrast = float(contrast)
+
+    if gamma is not None or contrast is not None:
+        if contrast is None:
+            contrast = 1.0
+        if gamma is None:
+            gamma = 1.0
+        
+        video_filters += [
+            'eq=%f:0.0:1.0:%f' % (contrast, gamma)
+        ]
+
+    if video_filters:
+        video_filters = [
+            '-vf', ','.join(video_filters)
+        ]
+        
     # this generates a stream of raw video pixels to standard output
     readcmd = [
         'ffmpeg',
-        '-i', moviename,
+        '-loglevel', ffmpeg_loglevel, '-stats' if ffmpeg_loglevel == 'info' else '-nostats',
+        '-i', moviename
+    ] + video_filters + [
         '-f', 'image2pipe', '-pix_fmt', 'rgb24',
         '-vcodec', 'rawvideo', '-'
     ]
@@ -139,6 +180,7 @@ def main(moviename):
     # this accepts a stream of raw video pixels on standard input
     writecmd = [
         'ffmpeg',
+        '-loglevel', ffmpeg_loglevel, '-stats' if ffmpeg_loglevel == 'info' else '-nostats',
         '-y', # clobber
         '-f', 'rawvideo',
         '-s', '%dx%d' % (shape[1], shape[0]),
