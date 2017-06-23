@@ -18,7 +18,7 @@ def main(eventcsv, framecsv):
     frameno_idx = None
     comment_idx = None
     t0 = None
-    t1 = None
+    t1 = -1
     t2 = None
 
     f = open(eventcsv, 'r')
@@ -32,18 +32,19 @@ def main(eventcsv, framecsv):
             pos = comment.find(pattern)
             if pos >= 0:
                 state = comment[pos + len(pattern):][0:2]
-                if state == 'CS':
+                if state == 'CS' and t0 is None:
                     t0 = int(row[frameno_idx])
-                    t1 = int(-1)
-                elif state == 'US':
+                elif state == 'US' and t1 == -1:
                     t1 = int(row[frameno_idx])
-                else:
-                    assert state == 'of'
+                elif state == 'of':
                     t2 = int(row[frameno_idx])
                     assert t0 < t2
                     assert t1 < t2
-                    assert t1 > t0 or t1 == -1
+                    assert t1 > t0 or t1 == -1, (t0, t1, t2)
                     CS_periods.append( (t0, t1, t2) )
+                    t0 = None
+                    t1 = -1
+                    t2 = None
 
     CS_periods = np.array(CS_periods, dtype=np.int32)
 
