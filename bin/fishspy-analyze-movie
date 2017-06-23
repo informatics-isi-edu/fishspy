@@ -230,6 +230,7 @@ def main(moviename):
     idle_tail_position = None
     idle_tail_length = None
     light_bases = None
+    light_bases_last_frameno = None
 
     # iterative state tracking for event detection, debug output, etc.
     prev_frame = None
@@ -289,7 +290,7 @@ def main(moviename):
     tmp_img1 = np.zeros(shape, dtype=np.uint8)
     tmp_img2 = np.zeros(shape, dtype=np.uint8)
     tmp_img3 = np.zeros(shape, dtype=np.bool)
-        
+
     # process every input frame
     while t < nbframes:
         # get raw pixels from input decoder and stuff into image buffer
@@ -315,6 +316,7 @@ def main(moviename):
             idle_tail_position = sum(idle_tail_positions) / num_calibration_frames
             idle_tail_length = sum(idle_tail_lengths) / num_calibration_frames
             light_bases = [ sum(starting_brightness_levels) / num_calibration_frames ]
+            light_bases_last_frameno = t
             light_index = 0
 
         note = []
@@ -327,9 +329,15 @@ def main(moviename):
             if abs(avg_position - idle_tail_position) > abs_tail_offset_threshold:
                 note.append('tail bent')
 
+            assert len(light_bases) <= 3
             if (brightness - light_bases[-1]) > light_toggle_threshold:
-                # expand our set of light tiers, assumes monotonic ramp during discovery
-                light_bases.append(brightness)
+                if (t - light_bases_last_frameno) > 10:
+                    # expand our set of light tiers, assumes monotonic ramp during discovery
+                    light_bases.append(brightness)
+                else:
+                    # revise our still rising last tier
+                    light_bases[-1] = brightness
+                light_bases_last_frameno = t
 
             prev_light_index = light_index
 
