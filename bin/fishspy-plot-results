@@ -52,7 +52,7 @@ def main(eventcsv, framecsv):
     CS_max_duration = (CS_periods[:,2] - CS_periods[:,0]).max()
     CS_cycles = (CS_periods[1:,0] - CS_periods[0:-1,0])
 
-    print "%d periods, %d frames max duration, %f average cycle" % (CS_cnt, CS_max_duration, CS_cycles.mean())
+    print "%d periods, %d frames max duration, %f average cycle, %d median cycle" % (CS_cnt, CS_max_duration, CS_cycles.mean(), np.median(CS_cycles))
 
     # extract binned position data into array with shape FxB for B bins
     frame_bins = []
@@ -79,14 +79,7 @@ def main(eventcsv, framecsv):
 
     print "guessed %s frames/sec" % fps
 
-    if CS_periods:
-        CS_periods = np.array(CS_periods, dtype=np.int32)
-        CS_cnt = CS_periods.shape[0]
-        CS_max_duration = (CS_periods[:,1] - CS_periods[:,0]).max()
-        CS_cycles = (CS_periods[1:,0] - CS_periods[0:-1,0])
-
-        print "%d periods, %d frames max duration, %f average cycle" % (CS_cnt, CS_max_duration, CS_cycles.mean())
-    else:
+    if CS_cnt == 0:
         print "found 0 CS periods... control experiment?"
         CS_periods = None
         CS_cnt = 0
@@ -149,7 +142,7 @@ def main(eventcsv, framecsv):
         # pretend we have uniform zero-width CS periods to fool the plot method
         CS_periods = np.array(
             [
-                ( i * width + preroll, i * width + preroll)
+                ( i * width + preroll, -1, i * width + preroll)
                 for i in range(CS_cnt)
             ],
             np.int32
@@ -157,9 +150,13 @@ def main(eventcsv, framecsv):
 
         draw_boundaries = False
 
+    assert width > 1000, "CS interval detection has failed to find a reasonable interval width"
+
     img = np.zeros((CS_cnt, pos_bin_cnt, width, 3), dtype=np.float32)
 
     print "%s plot space" % (img.shape,)
+
+    US_cnt = (CS_periods[:,1] > 0).sum()
 
     for period in range(CS_cnt):
 
@@ -189,7 +186,7 @@ def main(eventcsv, framecsv):
                 US_offset = CS_periods[period,1] - CS_periods[period,0]
                 img[period,:,preroll + US_offset,2] = 400
                 img[period,:,preroll + US_offset,0] = 100
-            elif (trial_periods[1] <= period < trial_periods[2]) or (trial_periods[3] <= period):
+            elif US_cnt < 2 and ((trial_periods[1] <= period < trial_periods[2]) or (trial_periods[2] < trial_periods[3] <= period)):
                 # show unconditioned stimulus marker too
                 img[period,:,preroll + int(dL * (1.0 - us_cs_ratio)),2] = 400
                 img[period,:,preroll + int(dL * (1.0 - us_cs_ratio)),0] = 100
