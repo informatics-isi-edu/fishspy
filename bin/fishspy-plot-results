@@ -12,13 +12,14 @@ pos_bin_cnt = 5
 
 def main(eventcsv, framecsv):
 
-    # extract CS periods as [ (on_frame, off_frame), ... ]
+    # extract CS periods as [ (CS_on_frame, US_on_frame or -1, off_frame), ... ]
     CS_periods = []
     
     frameno_idx = None
     comment_idx = None
     t0 = None
-    t1 = None
+    t1 = -1
+    t2 = None
 
     f = open(eventcsv, 'r')
     for row in csv.reader(f):
@@ -27,16 +28,31 @@ def main(eventcsv, framecsv):
             comment_idx = row.index('comment')
         else:
             comment = row[comment_idx]
-            pattern = 'light turns '
+            pattern = 'light state='
             pos = comment.find(pattern)
             if pos >= 0:
-                turns_on = {'of': False, 'on': True }[comment[pos + len(pattern):][0:2]]
-                if turns_on:
+                state = comment[pos + len(pattern):][0:2]
+                if state == 'CS' and t0 is None:
                     t0 = int(row[frameno_idx])
-                else:
-                    assert t0 is not None
+                elif state == 'US' and t1 == -1:
                     t1 = int(row[frameno_idx])
-                    CS_periods.append( (t0, t1) )
+                elif state == 'of':
+                    t2 = int(row[frameno_idx])
+                    assert t0 < t2
+                    assert t1 < t2
+                    assert t1 > t0 or t1 == -1, (t0, t1, t2)
+                    CS_periods.append( (t0, t1, t2) )
+                    t0 = None
+                    t1 = -1
+                    t2 = None
+
+    CS_periods = np.array(CS_periods, dtype=np.int32)
+
+    CS_cnt = CS_periods.shape[0]
+    CS_max_duration = (CS_periods[:,2] - CS_periods[:,0]).max()
+    CS_cycles = (CS_periods[1:,0] - CS_periods[0:-1,0])
+
+    print "%d periods, %d frames max duration, %f average cycle, %d median cycle" % (CS_cnt, CS_max_duration, CS_cycles.mean(), np.median(CS_cycles))
 
     # extract binned position data into array with shape FxB for B bins
     frame_bins = []
@@ -63,14 +79,7 @@ def main(eventcsv, framecsv):
 
     print "guessed %s frames/sec" % fps
 
-    if CS_periods:
-        CS_periods = np.array(CS_periods, dtype=np.int32)
-        CS_cnt = CS_periods.shape[0]
-        CS_max_duration = (CS_periods[:,1] - CS_periods[:,0]).max()
-        CS_cycles = (CS_periods[1:,0] - CS_periods[0:-1,0])
-
-        print "%d periods, %d frames max duration, %f average cycle" % (CS_cnt, CS_max_duration, CS_cycles.mean())
-    else:
+    if CS_cnt == 0:
         print "found 0 CS periods... control experiment?"
         CS_periods = None
         CS_cnt = 0
@@ -133,7 +142,7 @@ def main(eventcsv, framecsv):
         # pretend we have uniform zero-width CS periods to fool the plot method
         CS_periods = np.array(
             [
-                ( i * width + preroll, i * width + preroll)
+                ( i * width + preroll, -1, i * width + preroll)
                 for i in range(CS_cnt)
             ],
             np.int32
@@ -141,8 +150,13 @@ def main(eventcsv, framecsv):
 
         draw_boundaries = False
 
+    assert width > 1000, "CS interval detection has failed to find a reasonable interval width"
+
     img = np.zeros((CS_cnt, pos_bin_cnt, width, 3), dtype=np.float32)
+
     print "%s plot space" % (img.shape,)
+
+    US_cnt = (CS_periods[:,1] > 0).sum()
 
     for period in range(CS_cnt):
 
@@ -152,7 +166,7 @@ def main(eventcsv, framecsv):
         dw = min(d1 - d0, img.shape[2])
         d1 = d0 + dw
         
-        dL = CS_periods[period, 1] - CS_periods[period, 0]
+        dL = CS_periods[period, 2] - CS_periods[period, 0]
 
         # figure out offset for preroll and padding if not enough preroll data available
         pad = abs(d0) if d0 < 0 else 0
@@ -167,12 +181,16 @@ def main(eventcsv, framecsv):
             img[period,:,preroll,2] = 400
             img[period,:,preroll + dL,2] = 400
 
-            if (trial_periods[1] <= period < trial_periods[2]) \
-               or (trial_periods[3] <= period):
+            if CS_periods[period, 1] > 0:
+                # show unconditioned stimulus marker too
+                US_offset = CS_periods[period,1] - CS_periods[period,0]
+                img[period,:,preroll + US_offset,2] = 400
+                img[period,:,preroll + US_offset,0] = 100
+            elif US_cnt < 2 and ((trial_periods[1] <= period < trial_periods[2]) or (trial_periods[2] < trial_periods[3] <= period)):
                 # show unconditioned stimulus marker too
                 img[period,:,preroll + int(dL * (1.0 - us_cs_ratio)),2] = 400
                 img[period,:,preroll + int(dL * (1.0 - us_cs_ratio)),0] = 100
-            
+
     img = img.reshape((CS_cnt * pos_bin_cnt, img.shape[2], 3))
 
     img_full = img

@@ -87,7 +87,10 @@ def analyze_movie(row, debug_video=False):
     raw_filename = '%s.m4v' % movie_id
 
     # download the content to temp dir
-    store.get_obj(raw_url, destfilename=raw_filename)
+    try:
+        store.get_obj(raw_url, destfilename=raw_filename)
+    except Exception as e:
+        raise WorkerRuntimeError('could not download raw movie: %s' % e)
 
     # external analysis script arguments
     command = [
@@ -314,7 +317,7 @@ def look_for_work():
     """
     global idle_etag
 
-    claimable_work_url = '/entity/Zebrafish:Behavior/!Raw%20URL::null::/Events%20URL::null::;Frames%20URL::null::;Plot%20URL::null::/Status::null::;Status=null?limit=1'
+    claimable_work_url = '/entity/Zebrafish:Behavior/!Raw%20URL::null::/!FScope::null::/Events%20URL::null::;Frames%20URL::null::;Plot%20URL::null::/Status::null::;Status=null?limit=1'
     status_update_url = '/attributegroup/Zebrafish:Behavior/ID;Status'
     
     # this handled concurrent update for us to safely and efficiently claim a record
