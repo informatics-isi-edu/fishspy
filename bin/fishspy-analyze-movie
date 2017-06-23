@@ -270,7 +270,7 @@ def main(moviename):
             ][light_index]
             draw.text(
                 (0, 75),
-                "Light state=%s event=%s" % (['off','CS','US'][light_index], light_cycle_cnt),
+                "Light state=%s event=%s" % (['off','CS','US'][min(light_index,2)], light_cycle_cnt),
                 light_color,
                 font=font
             )
@@ -329,7 +329,6 @@ def main(moviename):
             if abs(avg_position - idle_tail_position) > abs_tail_offset_threshold:
                 note.append('tail bent')
 
-            assert len(light_bases) <= 3
             if (brightness - light_bases[-1]) > light_toggle_threshold:
                 if (t - light_bases_last_frameno) > 10:
                     # expand our set of light tiers, assumes monotonic ramp during discovery
@@ -356,7 +355,7 @@ def main(moviename):
                     if prev_light_index > 0:
                         light_cycle_cnt += 1
                     
-                note.append('light state=%s cycle=%d' % (['off','CS','US'][light_index], light_cycle_cnt))
+                note.append('light state=%s cycle=%d' % (['off','CS','US'][min(light_index,2)], light_cycle_cnt))
                 is_light_event = True
                     
         if prev_frame:
