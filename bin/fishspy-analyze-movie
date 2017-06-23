@@ -58,7 +58,7 @@ def process_frame(img, tmp_img1, tmp_img2, tmp_img3, debug_frame_sink=None):
     mask = tmp_img3
 
     max_window = 11
-    mask_thresh = 20
+    mask_thresh = 12
     maximum_filter1d(img_g, max_window, 0, output=img_max)
     np.subtract(img_max, img_g, out=img_dif)
     np.greater(img_dif, mask_thresh, out=mask)
