@@ -343,8 +343,13 @@ def main(moviename):
 
             # rough fit our current light-index
             for light_index in range(len(light_bases)):
-                if abs(brightness - light_bases[light_index]) < light_toggle_threshold:
+                mid = light_bases[light_index]
+                if brightness < mid:
                     break
+                if light_index < len(light_bases)-1:
+                    high = light_bases[light_index+1]
+                    if brightness < (mid + (high-mid) * 0.3):
+                        break
 
             if prev_light_index != light_index:
                 if light_index == 0:
