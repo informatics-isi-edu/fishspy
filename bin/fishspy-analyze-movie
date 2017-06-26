@@ -267,7 +267,7 @@ def main(moviename):
                 (128,128,128),
                 (0, 255, 0),
                 (255, 0, 0)
-            ][light_index]
+            ][min(light_index,2)]
             draw.text(
                 (0, 75),
                 "Light state=%s event=%s" % (['off','CS','US'][min(light_index,2)], light_cycle_cnt),
