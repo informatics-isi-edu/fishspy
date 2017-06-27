@@ -35,7 +35,10 @@ def main(eventcsv, framecsv):
                 if state == 'CS' and t0 is None:
                     t0 = int(row[frameno_idx])
                 elif state == 'US' and t1 == -1:
-                    t1 = int(row[frameno_idx])
+                    if t0 is None:
+                        t0 = int(row[frameno_idx])
+                    else:
+                        t1 = int(row[frameno_idx])
                 elif state == 'of':
                     t2 = int(row[frameno_idx])
                     assert t0 < t2
