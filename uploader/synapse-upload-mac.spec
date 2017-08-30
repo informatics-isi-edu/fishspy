@@ -3,6 +3,7 @@
 block_cipher = None
 
 from os import environ as env
+from synapse_upload.upload import SynapseUpload
 
 a = Analysis(['synapse_upload/upload.py'],
              pathex=[''],
@@ -41,7 +42,7 @@ app = BUNDLE(coll,
          bundle_identifier='org.qt-project.Qt.QtWebEngineCore',
          info_plist={
             'CFBundleDisplayName': 'Synapse File Upload Utility',
-            'CFBundleShortVersionString':'0.1.0',
+            'CFBundleShortVersionString':SynapseUpload.getVersion(),
             'NSPrincipalClass':'NSApplication',
             'NSHighResolutionCapable': 'True'
          })
