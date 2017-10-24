@@ -26,8 +26,9 @@ setup(
         'os',
         'sys',
         'logging',
-        'deriva_common',
-        'deriva_io'],
+        'deriva.core',
+        'deriva.transfer',
+        'deriva.qt'],
     license='Apache 2.0',
     classifiers=[
         'Intended Audience :: Science/Research',

@@ -2,7 +2,7 @@
 
 import json
 import pika
-from deriva_common import PollingErmrestCatalog, HatracStore, urlquote
+from deriva.core import PollingErmrestCatalog, HatracStore, urlquote
 import os
 import re
 import sys

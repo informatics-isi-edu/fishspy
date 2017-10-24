@@ -1,7 +1,8 @@
-import sys
 import logging
-from deriva_io.deriva_upload import DerivaUpload
-from deriva_qt.upload_gui.upload_app import DerivaUploadGUI
+import sys
+
+from deriva.transfer import DerivaUpload
+from deriva.qt import DerivaUploadGUI
 
 DESC = "Synapse Data Upload Utility"
 INFO = "For more information see: https://github.com/informatics-isi-edu/fishspy/uploader"
@@ -103,6 +104,7 @@ class SynapseUpload(DerivaUpload):
 def main():
     gui = DerivaUploadGUI(SynapseUpload, DESC, INFO, cookie_persistence=False)
     gui.main()
+
 
 if __name__ == '__main__':
     sys.exit(main())

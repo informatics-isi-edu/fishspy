@@ -6,7 +6,7 @@ INSTALL_SCRIPT=./install-script
 CLEAN_DIRS=./build ./dist ./*.egg-info
 
 install: force
-	python3 ./setup.py install
+	pip3 install --upgrade .
 
 bundle-win: install force
 	pyinstaller --clean synapse-upload-win.spec
