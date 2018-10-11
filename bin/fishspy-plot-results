@@ -106,8 +106,8 @@ def main(eventcsv, framecsv):
     user_invalid = user_invalid[None,:]
         
     # characterize statically invalid bins from first 100 frames
-    static_invalid = np.median(invalid[0:100,:], axis=0).astype(np.bool)[None,:] + user_invalid
-    
+    static_invalid = np.median(invalid[0:100,:], axis=0).astype(np.bool)[None,:] | user_invalid
+
     # inter-frame deltas but masking out invalid
     frame_delta_bins = np.zeros(frame_bins.shape, dtype=np.float32)
     frame_bins_masked = np.ma.masked_array(frame_bins, mask=invalid)#, fill_value = 0.0)
@@ -176,7 +176,7 @@ def main(eventcsv, framecsv):
         i0 = pad
         i1 = pad + dw
 
-        img[period,:,i0:i1,0] = (((invalid[d0:d1,:] - static_invalid[:,:]) > 0)* 8.0).transpose((1,0))
+        img[period,:,i0:i1,0] = (np.logical_and(invalid[d0:d1,:], np.invert(static_invalid[:,:]))* 8.0).transpose((1,0))
         img[period,:,i0:i1,1] = np.abs(frame_delta_bins[d0:d1,:]).transpose((1,0))
 
         if draw_boundaries:
