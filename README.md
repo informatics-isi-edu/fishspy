@@ -117,7 +117,9 @@ with movies having the following characteristics:
     a magenta-colored unconditioned stimulus marker.
 3. See the output, currently written to a fixed name in the current
    working directory:
-  - `movie_plot.png`
+  - _recordid_ `.plot.png` (or `movie_plot.png`) original plot format with red markers
+  - _recordid_ `.plot2.png` (or `movie_plot2.png`) simplified plot w/o red markers
+  - _recordid_ `.sums.csv` (or `movie_sums.csv`) simple windowed sums for each test cycle
   
 The 2D plot represents time proceeding from top-left corner to
 bottom-right corner:
@@ -147,6 +149,16 @@ bottom-right corner:
   movie. A long period of red indicates persistent loss of tracking,
   usually due to the fish leaving the imaging stage or some
   debris obscuring view of the fish.
+
+The window sums reported in CSV are simply the sum of absolute tail
+movement (delta position) observed in each frame in two distinct
+windows relative to the CS-on periods:
+
+- Window 0%-75% represents the first 3/4 of the CS period before the
+  US (if any) is activated.
+- Window 80%-130% represents the period immediately after the US (if
+  any) is activated and continues for a few seconds after the CS
+  period ends.
 
 ### Environment Parameters
 

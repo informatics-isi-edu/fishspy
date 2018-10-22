@@ -155,10 +155,15 @@ def main(eventcsv, framecsv):
     assert width > 1000, "CS interval detection has failed to find a reasonable interval width"
 
     img = np.zeros((CS_cnt, pos_bin_cnt, width, 3), dtype=np.float32)
+    img2 = np.zeros((CS_cnt, pos_bin_cnt, width, 3), dtype=np.float32)
 
     print "%s plot space" % (img.shape,)
 
     US_cnt = (CS_periods[:,1] > 0).sum()
+
+    csv_cycle_rows = [
+        ('cycle', '', 'sum_00_75', 'sum_80_130'),
+    ]
 
     for period in range(CS_cnt):
 
@@ -179,36 +184,71 @@ def main(eventcsv, framecsv):
         img[period,:,i0:i1,0] = (np.logical_and(invalid[d0:d1,:], np.invert(static_invalid[:,:]))* 8.0).transpose((1,0))
         img[period,:,i0:i1,1] = np.abs(frame_delta_bins[d0:d1,:]).transpose((1,0))
 
+        img2[period,:,i0:i1,1] = np.abs(frame_delta_bins[d0:d1,:]).transpose((1,0))
+
+        # measure cycle activity windows 0-75% and 80-130% relative to CS on/off boundaries
+        w0 = CS_periods[period, 0]
+        w100 = CS_periods[period, 2]
+        ww = w100 - w0
+        w75 = int(0.75 * ww) + w0
+        w80 = int(0.80 * ww) + w0
+        w130 = int(1.30 * ww) + w0
+        sum_00_75 = np.abs(frame_delta_bins[w0:w75,:]).sum()
+        sum_80_130 = np.abs(frame_delta_bins[w80:w130,:]).sum()
+        cycle_type = 'CS'
+
         if draw_boundaries:
             img[period,:,preroll,2] = 400
             img[period,:,preroll + dL,2] = 400
+
+            img2[period,:,preroll,2] = 400
+            img2[period,:,preroll + dL,2] = 400
 
             if CS_periods[period, 1] > 0:
                 # show unconditioned stimulus marker too
                 US_offset = CS_periods[period,1] - CS_periods[period,0]
                 img[period,:,preroll + US_offset,2] = 400
                 img[period,:,preroll + US_offset,0] = 100
+                #
+                img2[period,:,preroll + US_offset,2] = 400
+                img2[period,:,preroll + US_offset,0] = 100
+                #
+                cycle_type = 'CS+US'
             elif US_cnt < 2 and ((trial_periods[1] <= period < trial_periods[2]) or (trial_periods[2] < trial_periods[3] <= period)):
                 # show unconditioned stimulus marker too
                 img[period,:,preroll + int(dL * (1.0 - us_cs_ratio)),2] = 400
                 img[period,:,preroll + int(dL * (1.0 - us_cs_ratio)),0] = 100
+                #
+                img2[period,:,preroll + int(dL * (1.0 - us_cs_ratio)),2] = 400
+                img2[period,:,preroll + int(dL * (1.0 - us_cs_ratio)),0] = 100
+                #
+                cycle_type = 'CS+US'
+
+        csv_cycle_rows.append(
+            (period, cycle_type, sum_00_75, sum_80_130)
+        )
 
     img = img.reshape((CS_cnt * pos_bin_cnt, img.shape[2], 3))
+    img2 = img2.reshape((CS_cnt * pos_bin_cnt, img2.shape[2], 3))
 
     img_full = img
+    img2_full = img2
 
     # 20 fps -> 7x reduce
     x_reduce = int(img.shape[1] / 360.0)
     
     img = np.zeros( (img_full.shape[0], img_full.shape[1] / x_reduce, img_full.shape[2]), dtype=np.float32)
+    img2 = np.zeros( (img_full.shape[0], img_full.shape[1] / x_reduce, img_full.shape[2]), dtype=np.float32)
 
     for i in range(x_reduce):
         img[:,:,:] += img_full[:,slice(i,img.shape[1]*x_reduce,x_reduce),:]
+        img2[:,:,:] += img2_full[:,slice(i,img2.shape[1]*x_reduce,x_reduce),:]
     
     print "%s plot image shape using %d x-reduction" % (img.shape, x_reduce)
 
     #img *= 2.0
     img = np.sqrt(img) * 5.0
+    img2 = np.sqrt(img2) * 5.0
     #img = np.log1p(img)
     
     #img -= img.min()
@@ -216,19 +256,31 @@ def main(eventcsv, framecsv):
     #img *= 255.0 / (img.max() - img.min())
 
     img = np.clip(img * 5.0, 0.0, 255.0)
+    img2 = np.clip(img2 * 5.0, 0.0, 255.0)
 
     print "%s min/%s avg/%s max plot spread" % (img.min(), img.mean(), img.max())
 
-    m1 = re.match('^(?P<id>[^.]+)[.]events[.]csv$', os.path.basename(eventcsv))
-    m2 = re.match('^(?P<id>[^.]+)[.]frame_measures[.]csv$', os.path.basename(framecsv))
+    m1 = re.match('^(?P<id>[^.]+)[.]events[.]csv(?P<version>:[^:]+)?$', os.path.basename(eventcsv))
+    m2 = re.match('^(?P<id>[^.]+)[.]frame_measures[.]csv(?P<version>:[^:]+)?$', os.path.basename(framecsv))
     if m1 and m2 and m1.groupdict().get('id') == m2.groupdict().get('id'):
         png_filename = '%s.plot.png' % m1.groupdict().get('id')
+        png_filename2 = '%s.plot2.png' % m1.groupdict().get('id')
+        csv_filename = '%s.sums.csv' % m1.groupdict().get('id')
     else:
         # old-style for backward compatibility
         png_filename = 'movie_plot.png'
+        png_filename2 = 'movie_plot2.png'
+        csv_filename = 'movie_sums.csv'
 
     png.from_array(img.astype(np.uint8), mode='RGB').save(png_filename)
+    png.from_array(img2.astype(np.uint8), mode='RGB').save(png_filename2)
 
+    outf = open(csv_filename, 'w')
+    writer = csv.writer(outf)
+    for row in csv_cycle_rows:
+        writer.writerow(row)
+    del writer
+    outf.close()
 
 if __name__ == '__main__':
     events = sys.argv[1]
