@@ -136,14 +136,14 @@ def analyze_movie(row, debug_video=False):
     )
 
 def plot_movie_local(row, events_filename, frames_filename):
-    """Process analysis data and return plot filename.
+    """Process analysis data and return output filenames.
     
        Arguments:
          row: the experiment record from ERMrest
          events_filename: local file w/ events CSV
          frames_filename: local file w/ frame-measures CSV
 
-       Result: local filename for plot PNG
+       Result: local filenames for (plot PNG, plot2 PNG, sums CSV)
 
     """
     assert events_filename == ('%s.events.csv' % row['ID'])
@@ -163,7 +163,11 @@ def plot_movie_local(row, events_filename, frames_filename):
     if code != 0:
         raise WorkerRuntimeError('Non-zero plot exit status %s!' % code)
 
-    return '%s.plot.png' % row['ID']
+    return (
+        '%s.plot.png' % row['ID'],
+        '%s.plot2.png' % row['ID'],
+        '%s.sums.csv' % row['ID'],
+    )
 
 def plot_movie(row):
     """Plot movie data for experiment record.
@@ -171,7 +175,7 @@ def plot_movie(row):
        Arguments:
          row: record from ERMrest
 
-       Result: local filename for plot PNG based on row.
+       Result: local filenames for (plot PNG, plot2 PNG, sums CSV)
 
     """
     movie_id = row['ID']
@@ -260,23 +264,29 @@ def run_row_job(row):
 
         if analyze_outputs is not None:
             # plot local products
-            plot_output = plot_movie_local(row, *analyze_outputs[0:2])
+            plot_outputs = plot_movie_local(row, *analyze_outputs[0:2])
         else:
             # plot existing analysis data from object store
-            plot_output = plot_movie(
+            plot_outputs = plot_movie(
                 row
             )
 
-        # upload plot
-        plot_obj = '%s/%s.plot.png' % (subject_path, row['ID'])
-        plot_url = store.put_loc(plot_obj, plot_output, headers={'Content-Type': 'image/png'})
-
+        # upload plot outputs
         updated_row = {
             "ID": row["ID"],
             "Status": "processed",
-            "Plot URL": plot_url,
-            "Plot File Type": "png"
         }
+        obj_prefix = '%s/%s' % (subject_path, row['ID'])
+        for idx, obj_suffix, mtype, cname in [
+                (0, 'plot.png', 'image/png', 'Plot URL'),
+                (1, 'plot2.png', 'image/png', 'Plot2 URL'),
+                (2, 'sums.csv', 'text/csv', 'Sums URL'),
+        ]:
+            updated_row[cname] = store.put_loc(
+                '%s.%s' % (obj_prefix, obj_suffix),
+                plot_outputs[idx],
+                headers={'Content-Type': mtype}
+            )
 
         # record plot result in ermrest
         catalog.put(
@@ -317,7 +327,7 @@ def look_for_work():
     """
     global idle_etag
 
-    claimable_work_url = '/entity/Zebrafish:Behavior/!Raw%20URL::null::/!FScope::null::/Events%20URL::null::;Frames%20URL::null::;Plot%20URL::null::/Status::null::;Status=null?limit=1'
+    claimable_work_url = '/entity/Zebrafish:Behavior/!Raw%20URL::null::/!FScope::null::/Events%20URL::null::;Frames%20URL::null::;Plot%20URL::null::;Plot2%20URL::null::;Sums%20URL::null::/Status::null::;Status=null?limit=1'
     status_update_url = '/attributegroup/Zebrafish:Behavior/ID;Status'
     
     # this handled concurrent update for us to safely and efficiently claim a record
