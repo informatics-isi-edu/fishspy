@@ -143,7 +143,7 @@ def plot_movie_local(row, events_filename, frames_filename):
          events_filename: local file w/ events CSV
          frames_filename: local file w/ frame-measures CSV
 
-       Result: local filenames for (plot PNG, plot2 PNG, sums CSV)
+       Result: local filenames for (plot PNG, plot2 PNG, sums CSV, grade JSON)
 
     """
     assert events_filename == ('%s.events.csv' % row['ID'])
@@ -164,9 +164,9 @@ def plot_movie_local(row, events_filename, frames_filename):
         raise WorkerRuntimeError('Non-zero plot exit status %s!' % code)
 
     return (
-        '%s.plot.png' % row['ID'],
         '%s.plot2.png' % row['ID'],
         '%s.sums.csv' % row['ID'],
+        '%s.grade.json' % row['ID'],
     )
 
 def plot_movie(row):
@@ -175,7 +175,7 @@ def plot_movie(row):
        Arguments:
          row: record from ERMrest
 
-       Result: local filenames for (plot PNG, plot2 PNG, sums CSV)
+       Result: local filenames for (plot PNG, sums CSV)
 
     """
     movie_id = row['ID']
@@ -278,15 +278,24 @@ def run_row_job(row):
         }
         obj_prefix = '%s/%s' % (subject_path, row['ID'])
         for idx, obj_suffix, mtype, cname in [
-                (0, 'plot.png', 'image/png', 'Plot URL'),
-                (1, 'plot2.png', 'image/png', 'Plot2 URL'),
-                (2, 'sums.csv', 'text/csv', 'Sums URL'),
+                (0, 'plot2.png', 'image/png', 'Plot URL'),
+                (1, 'sums.csv', 'text/csv', 'Sums URL'),
         ]:
-            updated_row[cname] = store.put_loc(
-                '%s.%s' % (obj_prefix, obj_suffix),
-                plot_outputs[idx],
-                headers={'Content-Type': mtype}
-            )
+            if row[cname] is None:
+                updated_row[cname] = store.put_loc(
+                    '%s.%s' % (obj_prefix, obj_suffix),
+                    plot_outputs[idx],
+                    headers={'Content-Type': mtype}
+                )
+
+        with open(plot_outputs[2], 'r') as inf:
+            v = json.load(inf)
+            summary = v["summary"]
+            term = 'SYNAPSE:%s' % summary
+            if updated_row.get('Grade Details') != v:
+                updated_row['Grade Details'] = v
+            if updated_row.get('Grade') != term:
+                updated_row['Grade'] = term
 
         # record plot result in ermrest
         catalog.put(
@@ -327,7 +336,7 @@ def look_for_work():
     """
     global idle_etag
 
-    claimable_work_url = '/entity/Zebrafish:Behavior/!Raw%20URL::null::/!FScope::null::/Events%20URL::null::;Frames%20URL::null::;Plot%20URL::null::;Plot2%20URL::null::;Sums%20URL::null::/Status::null::;Status=null?limit=1'
+    claimable_work_url = '/entity/Zebrafish:Behavior/!Raw%20URL::null::/!FScope::null::/Events%20URL::null::;Frames%20URL::null::;Plot%20URL::null::;Sums%20URL::null::;Grade::null::/Status::null::;Status=null?limit=1'
     status_update_url = '/attributegroup/Zebrafish:Behavior/ID;Status'
     
     # this handled concurrent update for us to safely and efficiently claim a record
