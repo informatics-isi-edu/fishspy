@@ -206,7 +206,7 @@ def main(eventcsv, framecsv):
     print "%s plot space" % (img.shape,)
 
     csv_cycle_rows = [
-        ('cycle', '', 'act_00_30', 'act_85_130'),
+        ('cycle', 'type', 'act_00_30', 'act_85_130'),
     ]
 
     habit_rounds = []
@@ -241,11 +241,11 @@ def main(eventcsv, framecsv):
         w0 = CS_periods[period, 0]
         w100 = CS_periods[period, 2]
         ww = w100 - w0
-        w15 = int(0.30 * ww) + w0
+        w30 = int(0.30 * ww) + w0
         w85 = int(0.85 * ww) + w0
         w130 = int(1.30 * ww) + w0
 
-        act_00_30 = np.abs(frame_activity[w0:w15,0]).sum() > 0
+        act_00_30 = np.abs(frame_activity[w0:w30,0]).sum() > 0
         act_85_130 = np.abs(frame_activity[w85:w130,0]).sum() > 0
         cycle_type = 'CS'
 
@@ -282,7 +282,7 @@ def main(eventcsv, framecsv):
             retrain_rounds.append( measures )
 
         csv_cycle_rows.append(
-            (period, cycle_type, act_00_30, act_85_130)
+            (period, cycle_type,) + measures
         )
 
     img = img.reshape((CS_cnt * (pos_bin_cnt + 1), img.shape[2], 3))
@@ -332,24 +332,24 @@ def main(eventcsv, framecsv):
 
     grade = {
         "habituation_denominator": len(habit_check),
-        "habituation_us_numerator": len([ True for a1, a2 in habit_check if a1 ]),
+        "habituation_cs_numerator": len([ True for a1, a2 in habit_check if a1 ]),
         "training_denominator": len(train_check),
-        "training_us_numerator": len([ True for a1, a2 in train_check if a1 ]),
-        "training_cs_numerator": len([ True for a1, a2 in train_check if a2 ]),
+        "training_cs_numerator": len([ True for a1, a2 in train_check if a1 ]),
+        "training_us_numerator": len([ True for a1, a2 in train_check if a2 ]),
         "testing_denominator": len(test_check),
-        "testing_us_numerator": len([ True for a1, a2 in test_check if a1 ]),
+        "testing_cs_numerator": len([ True for a1, a2 in test_check if a1 ]),
     }
     grade.update({
-        "habituated": float(grade["habituation_us_numerator"])/grade["habituation_denominator"] <= 6./20 if grade["habituation_denominator"] else None,
-        "aversive": float(grade["training_cs_numerator"])/grade["training_denominator"] >= 14./20 if grade["training_denominator"] else None,
+        "habituated": float(grade["habituation_cs_numerator"])/grade["habituation_denominator"] <= 6./20 if grade["habituation_denominator"] else None,
+        "aversive": float(grade["training_us_numerator"])/grade["training_denominator"] >= 14./20 if grade["training_denominator"] else None,
     })
     if not grade["habituated"]:
         grade["summary"] = "bhv_no_habituation"
     elif not grade["aversive"]:
         grade["summary"] = "bhv_no_aversion"
-    elif float(grade["testing_us_numerator"])/grade["testing_denominator"] >= 4.5/5 if grade["testing_denominator"] else None:
+    elif float(grade["testing_cs_numerator"])/grade["testing_denominator"] >= 4.5/5 if grade["testing_denominator"] else None:
         grade["summary"] = "bhv_learner"
-    elif float(grade["testing_us_numerator"])/grade["testing_denominator"] <= 0.5/5 if grade["testing_denominator"] else None:
+    elif float(grade["testing_cs_numerator"])/grade["testing_denominator"] <= 0.5/5 if grade["testing_denominator"] else None:
         grade["summary"] = "bhv_nonlearner"
     else:
         grade["summary"] = "bhv_inconclusive"
