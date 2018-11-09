@@ -143,10 +143,15 @@ def main(eventcsv, framecsv):
     us_cs_ratio = float(os.getenv('FISHSPY_US_CS_RATIO', '0.2'))
     trial_periods = None
     static_trial_phases = False
-    trial_counts = os.getenv('FISHSPY_TRIAL_COUNTS')
-    trial_counts = trial_counts.split(',')
-    assert len(trial_counts) == 4, "FISHSPY_TRIAL_COUNTS must be comma-separated list of 4 decimal integers"
-    trial_counts = np.array([ int(x) for x in trial_counts ], dtype=np.int32)
+    try:
+        trial_counts = os.getenv('FISHSPY_TRIAL_COUNTS')
+        trial_counts = trial_counts.split(',')
+    except:
+        trial_counts = None
+
+    if trial_counts is not None:
+        assert len(trial_counts) == 4, "FISHSPY_TRIAL_COUNTS must be comma-separated list of 4 decimal integers"
+        trial_counts = np.array([ int(x) for x in trial_counts ], dtype=np.int32)
 
     # determine analysis and plot space
 
@@ -206,13 +211,15 @@ def main(eventcsv, framecsv):
     print "%s plot space" % (img.shape,)
 
     csv_cycle_rows = [
-        ('cycle', 'type', 'act_00_30', 'act_85_130'),
+        ('cycle', 'type', 'pre_cs_act', 'post_cs_act', 'pre_us_act', 'post_us_act'),
     ]
 
     habit_rounds = []
     train_rounds = []
     test_rounds = []
     retrain_rounds = []
+    us_boundaries_inferred = 0
+    us_boundaries_detected = 0
 
     for period in range(CS_cnt):
 
@@ -238,23 +245,26 @@ def main(eventcsv, framecsv):
         img[period,0:1,i0:i1,2] = frame_activity[d0:d1].transpose((1,0)) * max_level/4.0
 
         # measure cycle activity windows 0-75% and 80-130% relative to CS on/off boundaries
-        w0 = CS_periods[period, 0]
+        wCS = CS_periods[period, 0]
+        wUS = CS_periods[period, 1]
         w100 = CS_periods[period, 2]
-        ww = w100 - w0
-        w30 = int(0.30 * ww) + w0
-        w85 = int(0.85 * ww) + w0
-        w130 = int(1.30 * ww) + w0
+        ww = w100 - wCS
 
-        act_00_30 = np.abs(frame_activity[w0:w30,0]).sum() > 0
-        act_85_130 = np.abs(frame_activity[w85:w130,0]).sum() > 0
+        wG1 = wCS - int(0.20 * ww)
+        w30 = int(0.30 * ww) + wCS
+        wG2 = wUS - int(0.20 * ww)
+        w130 = int(1.30 * ww) + wCS
+
         cycle_type = 'CS'
 
         if draw_boundaries:
             img[period,:,preroll,2] = max_level
             img[period,:,preroll + dL,2] = max_level
 
-            # HACK: assume valid US detection is at least 5 seconds * 20fps after CS detection
-            if (CS_periods[period, 1] - CS_periods[period, 0]) > 100:
+        # HACK: assume valid US detection is at least 5 seconds * 20fps after CS detection
+        if (CS_periods[period, 1] - CS_periods[period, 0]) > 100:
+            us_boundaries_detected += 1
+            if draw_boundaries:
                 # show unconditioned stimulus marker too
                 US_offset = CS_periods[period,1] - CS_periods[period,0]
                 #
@@ -262,7 +272,12 @@ def main(eventcsv, framecsv):
                 img[period,:,preroll + US_offset,0] = max_level
                 #
                 cycle_type = 'CS+US'
-            elif static_trial_phases and ((trial_periods[1] <= period < trial_periods[2]) or (trial_periods[2] < trial_periods[3] <= period)):
+        elif static_trial_phases and ((trial_periods[1] <= period < trial_periods[2]) or (trial_periods[2] < trial_periods[3] <= period)):
+            # simulate US detection
+            us_boundaries_inferred += 1
+            wUS = wCS + int((1.0 - us_cs_ratio) * ww)
+            wG2 = wUS - int(0.20 * ww)
+            if draw_boundaries:
                 # show unconditioned stimulus marker too
                 #
                 img[period,:,preroll + int(dL * (1.0 - us_cs_ratio)),2] = max_level
@@ -270,8 +285,12 @@ def main(eventcsv, framecsv):
                 #
                 cycle_type = 'CS+US'
 
+        act_pre_cs = np.abs(frame_activity[wG1:wCS,0]).sum() > 0
+        act_cs = np.abs(frame_activity[wCS:w30,0]).sum() > 0
+        act_pre_us = np.abs(frame_activity[wG2:wUS,0]).sum() > 0
+        act_us = np.abs(frame_activity[wUS:w130,0]).sum() > 0
 
-        measures = (act_00_30, act_85_130)
+        measures = (act_pre_cs, act_cs, act_pre_us, act_us)
         if trial_periods[0] <= period < trial_periods[1]:
             habit_rounds.append( measures )
         elif trial_periods[1] <= period < trial_periods[2]:
@@ -327,21 +346,40 @@ def main(eventcsv, framecsv):
     outf.close()
 
     habit_check = habit_rounds[-10:]
-    train_check = train_rounds
+    trainA_check = train_rounds
+    trainL_check = train_rounds[-len(train_rounds)/2:]
     test_check = test_rounds
 
     grade = {
+        "us_boundaries_detected": us_boundaries_detected,
+        "us_boundaries_inferred": us_boundaries_inferred,
         "habituation_denominator": len(habit_check),
-        "habituation_cs_numerator": len([ True for a1, a2 in habit_check if a1 ]),
-        "training_denominator": len(train_check),
-        "training_cs_numerator": len([ True for a1, a2 in train_check if a1 ]),
-        "training_us_numerator": len([ True for a1, a2 in train_check if a2 ]),
+        "habituation_cs_numerator": len([ True for g1, a1, g2, a2 in habit_check if a1 ]),
+        "habituation_cs_guard_numerator": len([ True for g1, a1, g2, a2 in habit_check if g1 ]),
+        "training_all_denominator": len(trainA_check),
+        "training_late_denominator": len(trainL_check),
+        "training_all_cs_numerator": len([ True for g1, a1, g2, a2 in trainA_check if a1 ]),
+        "training_all_us_numerator": len([ True for g1, a1, g2, a2 in trainA_check if a2 ]),
+        "training_late_cs_numerator": len([ True for g1, a1, g2, a2 in trainL_check if a1 ]),
+        "training_late_us_numerator": len([ True for g1, a1, g2, a2 in trainL_check if a2 ]),
         "testing_denominator": len(test_check),
-        "testing_cs_numerator": len([ True for a1, a2 in test_check if a1 ]),
+        "testing_cs_numerator": len([ True for g1, a1, g2, a2 in test_check if a1 ]),
+        "testing_cs_guard_numerator": len([ True for g1, a1, g2, a2 in test_check if g1 ]),
     }
+
+    if not grade["training_all_denominator"]:
+        aversive = None
+    elif not grade["training_late_denominator"]:
+        aversive = None
+    elif float(grade["training_all_us_numerator"])/grade["training_all_denominator"] >= 0.5 \
+         and float(grade["training_late_us_numerator"])/grade["training_late_denominator"] >= 0.5:
+        aversive = True
+    else:
+        aversive = False
+
     grade.update({
         "habituated": float(grade["habituation_cs_numerator"])/grade["habituation_denominator"] <= 6./20 if grade["habituation_denominator"] else None,
-        "aversive": float(grade["training_us_numerator"])/grade["training_denominator"] >= 14./20 if grade["training_denominator"] else None,
+        "aversive": aversive
     })
     if not grade["habituated"]:
         grade["summary"] = "bhv_no_habituation"
