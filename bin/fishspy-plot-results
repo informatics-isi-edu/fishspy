@@ -203,6 +203,10 @@ def main(eventcsv, framecsv):
             trial_periods[p] = trial_counts[0:p].sum()
         static_trial_phases = True
         print "trial_periods from ENV: %s" % trial_periods
+    elif trial_periods is None:
+        # fake CS-only trial periods
+        trial_periods = np.zeros( (4,), dtype=np.int32 )
+        trial_periods[1:] = len(CS_periods)
 
     assert width > 1000, "CS interval detection has failed to find a reasonable interval width"
 
@@ -240,9 +244,8 @@ def main(eventcsv, framecsv):
         # draw bins green using motion data
         img[period,1:,i0:i1,1] = frame_delta_bins[d0:d1,:].transpose((1,0))
 
-        # draw motion periods with magenta flags
-        img[period,0:1,i0:i1,0] = frame_activity[d0:d1].transpose((1,0)) * max_level/4.0
-        img[period,0:1,i0:i1,2] = frame_activity[d0:d1].transpose((1,0)) * max_level/4.0
+        # draw motion periods with yellow flags
+        img[period,0:1,i0:i1,0:3] = frame_activity[d0:d1].transpose(1,0)[:,:,None] * max_level
 
         # measure cycle activity windows 0-75% and 80-130% relative to CS on/off boundaries
         wCS = CS_periods[period, 0]
