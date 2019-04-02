@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import json
 import pika
@@ -18,6 +18,9 @@ import subprocess
 
 # server to talk to... defaults to our own FQDN
 servername = os.getenv('FISHSPY_SERVER', platform.uname()[1])
+
+scriptdir = os.getenv('FISHSPY_PATH', '')
+scriptdir = '%s/' % scriptdir if scriptdir else ''
 
 # secret session cookie
 credfile = os.getenv('FISHSPY_CREDENTIALS', 'credentials.json')
@@ -94,7 +97,7 @@ def analyze_movie(row, debug_video=False):
 
     # external analysis script arguments
     command = [
-        'fishspy-analyze-movie',
+        scriptdir + 'fishspy-analyze-movie',
         raw_filename
     ]
 
@@ -150,7 +153,7 @@ def plot_movie_local(row, events_filename, frames_filename):
     assert frames_filename == ('%s.frame_measures.csv' % row['ID'])
 
     command = [
-        'fishspy-plot-results',
+        scriptdir + 'fishspy-plot-results',
         events_filename,
         frames_filename
     ]

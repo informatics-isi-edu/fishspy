@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import os
 import sys
@@ -71,14 +71,19 @@ def process_frame(img, tmp_img1, tmp_img2, tmp_img3, debug_frame_sink=None):
     tail_length = np.sum(x_heights > 0)
 
     tail_slc = slice( int(W*avg_position_bounds[0]), int(W*avg_position_bounds[1]) )
-    tail_position = int(np.sum( x_heights[tail_slc] ) / np.sum( x_heights[tail_slc] > 0 ))
+    try:
+        tail_position = int(np.sum( x_heights[tail_slc] ) / np.sum( x_heights[tail_slc] > 0 ))
+    except ValueError:
+        tail_position = 0
 
     position_bins = []
     for b in range(num_position_bins):
         bin_slc = slice( int(W*b/num_position_bins), int(W*(b+1)/num_position_bins) )
-        position_bins.append(
-            int(np.sum( x_heights[bin_slc] ) / np.sum( x_heights[bin_slc] > 0 ))
-        )
+        try:
+            pos = int(np.sum( x_heights[bin_slc] ) / np.sum( x_heights[bin_slc] > 0 ))
+        except ValueError:
+            pos = 0
+        position_bins.append(pos)
     
     # illustrate the analysis decisions in an output movie frame
     if debug_frame_sink is not None:
@@ -139,7 +144,7 @@ def main(moviename):
             ]
             shape = H, W
         except:
-            print "Could not decode crop parameter. Expected width:height:xoffset:yoffset with decimal numbers."
+            print ("Could not decode crop parameter. Expected width:height:xoffset:yoffset with decimal numbers.")
             raise
 
     frame_nbytes = shape[0] * shape[1] * 3
@@ -214,7 +219,7 @@ def main(moviename):
         
     # setup the image buffer we'll use for each frame
     in_img = np.zeros(shape + (3,), dtype='uint8')
-    in_buffer = np.getbuffer(in_img)
+    in_buffer = memoryview(in_img)
 
     # start the input movie decoder
     in_pipe = subprocess.Popen(readcmd, stdin=fnull, stdout=subprocess.PIPE, bufsize=frame_nbytes*24)

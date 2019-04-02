@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import os
 import sys
@@ -57,9 +57,9 @@ def main(eventcsv, framecsv):
         CS_max_duration = (CS_periods[:,2] - CS_periods[:,0]).max()
         CS_cycles = (CS_periods[1:,0] - CS_periods[0:-1,0])
 
-        print "%d periods, %d frames max duration, %f average cycle, %d median cycle" % (CS_cnt, CS_max_duration, CS_cycles.mean(), np.median(CS_cycles))
+        print ("%d periods, %d frames max duration, %f average cycle, %d median cycle" % (CS_cnt, CS_max_duration, CS_cycles.mean(), np.median(CS_cycles)))
     else:
-        print "found 0 CS periods... control experiment?"
+        print ("found 0 CS periods... control experiment?")
         CS_periods = None
         CS_cnt = 0
         CS_max_duration = None
@@ -82,13 +82,13 @@ def main(eventcsv, framecsv):
 
     frame_bins = np.array(frame_bins, dtype=np.int32)
 
-    print "%d frames, %d position bins" % frame_bins.shape
-    print "%d min/%d avg/%d max position spread" % (frame_bins.min(), frame_bins.mean(), frame_bins.max())
+    print ("%d frames, %d position bins" % frame_bins.shape)
+    print ("%d min/%d avg/%d max position spread" % (frame_bins.min(), frame_bins.mean(), frame_bins.max()))
 
     # HACK:  guess at FPS for reduction ratio... assume k * 20 fps  and approximate total duration
     fps = int(frame_bins.shape[0] / 200000.0) * 20
 
-    print "guessed %s frames/sec" % fps
+    print ("guessed %s frames/sec" % fps)
 
     # zeros mean invalid measurements
     invalid = np.zeros(frame_bins.shape, dtype=np.bool)
@@ -138,7 +138,7 @@ def main(eventcsv, framecsv):
     # thresholded motion values as boolean
     frame_activity = (temp >= (temp.mean() + 0.04 * (temp.max()-temp.mean())  ))
 
-    print "%d min/%d avg/%d max delta position spread" % (frame_delta_bins.min(), frame_delta_bins.mean(), frame_delta_bins.max())
+    print ("%d min/%d avg/%d max delta position spread" % (frame_delta_bins.min(), frame_delta_bins.mean(), frame_delta_bins.max()))
 
     us_cs_ratio = float(os.getenv('FISHSPY_US_CS_RATIO', '0.2'))
     trial_periods = None
@@ -176,7 +176,7 @@ def main(eventcsv, framecsv):
             # reset due to lack of detected US periods, i.e. older 2-level illumination movies
             trial_periods = None
         else:
-            print "trial_periods from events: %s" % trial_periods
+            print ("trial_periods from events: %s" % trial_periods)
     else:
         assert trial_counts is not None, "Must provide FISHSPY_TRIAL_COUNTS for control data lacking CS periods"
 
@@ -202,7 +202,7 @@ def main(eventcsv, framecsv):
         for p in range(1,4):
             trial_periods[p] = trial_counts[0:p].sum()
         static_trial_phases = True
-        print "trial_periods from ENV: %s" % trial_periods
+        print ("trial_periods from ENV: %s" % trial_periods)
     elif trial_periods is None:
         # fake CS-only trial periods
         trial_periods = np.zeros( (4,), dtype=np.int32 )
@@ -212,7 +212,7 @@ def main(eventcsv, framecsv):
 
     img = np.zeros((CS_cnt, pos_bin_cnt + 1, width, 3), dtype=np.float32)
 
-    print "%s plot space" % (img.shape,)
+    print ("%s plot space" % (img.shape,))
 
     csv_cycle_rows = [
         ('cycle', 'type', 'pre_cs_act', 'post_cs_act', 'pre_us_act', 'post_us_act'),
@@ -314,18 +314,18 @@ def main(eventcsv, framecsv):
     # 20 fps -> 7x reduce
     x_reduce = int(img.shape[1] / 360.0)
     
-    img = np.zeros( (img_full.shape[0], img_full.shape[1] / x_reduce, img_full.shape[2]), dtype=np.float32)
+    img = np.zeros( (img_full.shape[0], int(img_full.shape[1] // x_reduce), img_full.shape[2]), dtype=np.float32)
 
     for i in range(x_reduce):
-        img[:,:,:] += img_full[:,slice(i,img.shape[1]*x_reduce,x_reduce),:]
+        img[:,:,:] += img_full[:,slice(i,int(img.shape[1]*x_reduce),int(x_reduce)),:]
 
-    print "%s plot image shape using %d x-reduction" % (img.shape, x_reduce)
+    print ("%s plot image shape using %d x-reduction" % (img.shape, x_reduce))
 
     img = np.sqrt(img)
-    img *= 255.0 / img[:,:,1].max()
+    img *= 255.0 // img[:,:,1].max()
     img = np.clip(img * 3.0, 0.0, 255.0)
 
-    print "%s min/%s avg/%s max plot spread" % (img.min(), img.mean(), img.max())
+    print ("%s min/%s avg/%s max plot spread" % (img.min(), img.mean(), img.max()))
 
     m1 = re.match('^(?P<id>[^.]+)[.]events[.]csv(?P<version>:[^:]+)?$', os.path.basename(eventcsv))
     m2 = re.match('^(?P<id>[^.]+)[.]frame_measures[.]csv(?P<version>:[^:]+)?$', os.path.basename(framecsv))
@@ -350,7 +350,7 @@ def main(eventcsv, framecsv):
 
     habit_check = habit_rounds[-10:]
     trainA_check = train_rounds
-    trainL_check = train_rounds[-len(train_rounds)/2:]
+    trainL_check = train_rounds[-len(train_rounds)//2:]
     test_check = test_rounds
 
     grade = {
