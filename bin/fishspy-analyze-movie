@@ -66,24 +66,19 @@ def process_frame(img, tmp_img1, tmp_img2, tmp_img3, debug_frame_sink=None):
     img_brightness = int(np.sum(img_g) / ( W * H ))
     
     # find the "heights" i.e. centers of mass in Y axis of dark pixels
-    x_heights = (np.sum((mask * np.array(range(img_g.shape[0]))[:,None]), axis=0) / np.sum(mask, axis=0))
+    x_heights = (np.nansum((mask * np.array(range(img_g.shape[0]))[:,None]), axis=0) // np.nansum(mask, axis=0))
 
-    tail_length = np.sum(x_heights > 0)
+    tail_length = np.nansum(x_heights > 0)
 
     tail_slc = slice( int(W*avg_position_bounds[0]), int(W*avg_position_bounds[1]) )
-    try:
-        tail_position = int(np.sum( x_heights[tail_slc] ) / np.sum( x_heights[tail_slc] > 0 ))
-    except ValueError:
-        tail_position = 0
+    tail_position = int(np.nan_to_num(np.nansum( x_heights[tail_slc] ) // np.nansum( x_heights[tail_slc] > 0 )))
 
     position_bins = []
     for b in range(num_position_bins):
-        bin_slc = slice( int(W*b/num_position_bins), int(W*(b+1)/num_position_bins) )
-        try:
-            pos = int(np.sum( x_heights[bin_slc] ) / np.sum( x_heights[bin_slc] > 0 ))
-        except ValueError:
-            pos = 0
-        position_bins.append(pos)
+        bin_slc = slice( int(W*b//num_position_bins), int(W*(b+1)//num_position_bins) )
+        position_bins.append(
+            int(np.nan_to_num(np.nansum( x_heights[bin_slc] ) // np.nansum( x_heights[bin_slc] > 0 )))
+        )
     
     # illustrate the analysis decisions in an output movie frame
     if debug_frame_sink is not None:
@@ -91,7 +86,7 @@ def process_frame(img, tmp_img1, tmp_img2, tmp_img3, debug_frame_sink=None):
         img_rgb[:,:,2] += mask * np.uint8(255)
         for x in range(int(W*avg_position_bounds[0]), int(W*avg_position_bounds[1])):
             if x_heights[x] > 0:
-                img_rgb[x_heights[x], x, 0] = np.uint8(255)
+                img_rgb[int(x_heights[x]), x, 0] = np.uint8(255)
         debug_frame_sink(img_rgb)
     
     return img_brightness, tail_position, position_bins, x_heights, tail_length
