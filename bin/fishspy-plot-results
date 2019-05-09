@@ -6,6 +6,7 @@ import json
 import csv
 import math
 import numpy as np
+import scipy.ndimage as nd
 import scipy.ndimage.filters
 import png
 import re
@@ -135,7 +136,13 @@ def main(eventcsv, framecsv):
     # smear tail-speed over time
     temp = scipy.ndimage.filters.gaussian_filter(temp, sigma=0.4) # size is 6sigma - 1, sigma=1.35->diameter 7.1
 
+    tail_speed = np.log1p(temp)
+    tail_speed_range = (tail_speed.min(), tail_speed.max())
+    tail_speed = (tail_speed - tail_speed_range[0]) * (1./(tail_speed_range[1] - tail_speed_range[0]))
+    print('tail_speed %s %s .. %s' % (tail_speed.dtype, tail_speed.min(), tail_speed.max()))
+
     # thresholded motion values as boolean
+    print('activity range %s .. %s (%s mean)' % (temp.min(), temp.max(), temp.mean()))
     frame_activity = (temp >= (temp.mean() + 0.04 * (temp.max()-temp.mean())  ))
 
     print ("%d min/%d avg/%d max delta position spread" % (frame_delta_bins.min(), frame_delta_bins.mean(), frame_delta_bins.max()))
@@ -210,12 +217,17 @@ def main(eventcsv, framecsv):
 
     assert width > 1000, "CS interval detection has failed to find a reasonable interval width"
 
-    img = np.zeros((CS_cnt, pos_bin_cnt + 1, width, 3), dtype=np.float32)
+    bg_color = np.array([1, 1, 1], dtype=np.float32)
+    cs_bg_color = np.array([0.9, 0.9, 0.9], dtype=np.float32)
+    us_bg_color = np.array([0.75, 0.75, 0.75], dtype=np.float32)
+    track_height = 6
+
+    img = np.full((CS_cnt, track_height, width, 3), bg_color, dtype=np.float32)
 
     print ("%s plot space" % (img.shape,))
 
     csv_cycle_rows = [
-        ('cycle', 'type', 'pre_cs_act', 'post_cs_act', 'pre_us_act', 'post_us_act'),
+        ('cycle', 'type', 'cs_1st_half_act_lvl', 'pre_cs_act', 'post_cs_act', 'pre_us_act', 'post_us_act'),
     ]
 
     habit_rounds = []
@@ -224,6 +236,8 @@ def main(eventcsv, framecsv):
     retrain_rounds = []
     us_boundaries_inferred = 0
     us_boundaries_detected = 0
+
+    period_sums = np.zeros((CS_cnt,), dtype=np.float32)
 
     for period in range(CS_cnt):
 
@@ -241,12 +255,6 @@ def main(eventcsv, framecsv):
         i0 = pad
         i1 = pad + dw
 
-        # draw bins green using motion data
-        img[period,1:,i0:i1,1] = frame_delta_bins[d0:d1,:].transpose((1,0))
-
-        # draw motion periods with yellow flags
-        img[period,0:1,i0:i1,0:3] = frame_activity[d0:d1].transpose(1,0)[:,:,None] * max_level
-
         # measure cycle activity windows 0-75% and 80-130% relative to CS on/off boundaries
         wCS = CS_periods[period, 0]
         wUS = CS_periods[period, 1]
@@ -258,35 +266,36 @@ def main(eventcsv, framecsv):
         wG2 = wUS - int(0.20 * ww)
         w130 = int(1.30 * ww) + wCS
 
-        cycle_type = 'CS'
-
-        if draw_boundaries:
-            img[period,:,preroll,2] = max_level
-            img[period,:,preroll + dL,2] = max_level
+        # draw CS period background
+        img[period,0:-1,preroll:preroll + dL,:] = cs_bg_color
 
         # HACK: assume valid US detection is at least 5 seconds * 20fps after CS detection
+        cycle_type = 'CS'
         if (CS_periods[period, 1] - CS_periods[period, 0]) > 100:
             us_boundaries_detected += 1
-            if draw_boundaries:
-                # show unconditioned stimulus marker too
-                US_offset = CS_periods[period,1] - CS_periods[period,0]
-                #
-                img[period,:,preroll + US_offset,2] = max_level
-                img[period,:,preroll + US_offset,0] = max_level
-                #
-                cycle_type = 'CS+US'
+            # show unconditioned stimulus marker too
+            US_offset = CS_periods[period,1] - CS_periods[period,0]
+            img[period,0:-1,preroll + US_offset:preroll + dL,:] = us_bg_color
+            #
+            cycle_type = 'CS+US'
         elif static_trial_phases and ((trial_periods[1] <= period < trial_periods[2]) or (trial_periods[2] < trial_periods[3] <= period)):
             # simulate US detection
             us_boundaries_inferred += 1
             wUS = wCS + int((1.0 - us_cs_ratio) * ww)
             wG2 = wUS - int(0.20 * ww)
-            if draw_boundaries:
-                # show unconditioned stimulus marker too
-                #
-                img[period,:,preroll + int(dL * (1.0 - us_cs_ratio)),2] = max_level
-                img[period,:,preroll + int(dL * (1.0 - us_cs_ratio)),0] = max_level
-                #
-                cycle_type = 'CS+US'
+            # show unconditioned stimulus marker too
+            #
+            img[period,0:-1,preroll + int(dL * (1.0 - us_cs_ratio)):preroll + dL,:] = us_bg_color
+            #
+            cycle_type = 'CS+US'
+
+        # draw motion periods as pulses
+        img[period,0:-1,i0:i1,:] = (
+            img[period,0:-1,i0:i1,:] * np.logical_not(frame_activity[d0:d1])
+            # + frame_activity[d0:d1] * (1.0 - tail_speed[d0:d1])
+        )
+
+        period_sums[period] = (tail_speed[d0:d0+int((d1-d0)//2)] * frame_activity[d0:d0+int((d1-d0)//2)]).sum()
 
         act_pre_cs = np.abs(frame_activity[wG1:wCS,0]).sum() > 0
         act_cs = np.abs(frame_activity[wCS:w30,0]).sum() > 0
@@ -304,38 +313,45 @@ def main(eventcsv, framecsv):
             retrain_rounds.append( measures )
 
         csv_cycle_rows.append(
-            (period, cycle_type,) + measures
+            (period, cycle_type, period_sums[period]) + measures
         )
 
-    img = img.reshape((CS_cnt * (pos_bin_cnt + 1), img.shape[2], 3))
+    dL = np.median(CS_periods[:,2] - CS_periods[:,0])
+    left_edge = int(preroll - dL//2)
+    right_edge = int(preroll+dL*3//2)
+
+    print("Trial periods: %s" % (trial_periods))
+#    for i in range(1, trial_periods.shape[0] - 1):
+#        img[trial_periods[i]-1,pos_bin_cnt,::5,:] = 0.
+
+    img = img.reshape((CS_cnt * track_height, img.shape[2], 3))
 
     img_full = img
 
+    print ("%s min/%s avg/%s max plot spread" % (img.min(), img.mean(), img.max()))
     # 20 fps -> 7x reduce
-    x_reduce = int(img.shape[1] / 360.0)
-    
-    img = np.zeros( (img_full.shape[0], int(img_full.shape[1] // x_reduce), img_full.shape[2]), dtype=np.float32)
+    x_reduce = 1 # int(img.shape[1] / 360.0)
 
-    for i in range(x_reduce):
-        img[:,:,:] += img_full[:,slice(i,int(img.shape[1]*x_reduce),int(x_reduce)),:]
+    img = nd.minimum_filter(img_full, size=(1,x_reduce,1))[:,left_edge:right_edge:x_reduce,:]
+    print("Reduction min filter input shape %s output shape %s" % (img_full.shape, img.shape))
 
     print ("%s plot image shape using %d x-reduction" % (img.shape, x_reduce))
 
-    img = np.sqrt(img)
-    img *= 255.0 // img[:,:,1].max()
-    img = np.clip(img * 3.0, 0.0, 255.0)
+    #img = np.sqrt(img)
+    img *= 255.0 / img[:,:,1].max()
+    img = np.clip(img, 0.0, 255.0)
 
     print ("%s min/%s avg/%s max plot spread" % (img.min(), img.mean(), img.max()))
 
     m1 = re.match('^(?P<id>[^.]+)[.]events[.]csv(?P<version>:[^:]+)?$', os.path.basename(eventcsv))
     m2 = re.match('^(?P<id>[^.]+)[.]frame_measures[.]csv(?P<version>:[^:]+)?$', os.path.basename(framecsv))
     if m1 and m2 and m1.groupdict().get('id') == m2.groupdict().get('id'):
-        png_filename2 = '%s.plot2.png' % m1.groupdict().get('id')
+        png_filename2 = '%s.plot3.png' % m1.groupdict().get('id')
         csv_filename = '%s.sums.csv' % m1.groupdict().get('id')
         json_filename = '%s.grade.json' % m1.groupdict().get('id')
     else:
         # old-style for backward compatibility
-        png_filename2 = 'movie_plot2.png'
+        png_filename2 = 'movie_plot3.png'
         csv_filename = 'movie_sums.csv'
         json_filename = 'movie_grade.json'
 

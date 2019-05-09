@@ -146,7 +146,7 @@ def plot_movie_local(row, events_filename, frames_filename):
          events_filename: local file w/ events CSV
          frames_filename: local file w/ frame-measures CSV
 
-       Result: local filenames for (plot PNG, plot2 PNG, sums CSV, grade JSON)
+       Result: local filenames for (plot PNG, plot3 PNG, sums CSV, grade JSON)
 
     """
     assert events_filename == ('%s.events.csv' % row['ID'])
@@ -167,7 +167,7 @@ def plot_movie_local(row, events_filename, frames_filename):
         raise WorkerRuntimeError('Non-zero plot exit status %s!' % code)
 
     return (
-        '%s.plot2.png' % row['ID'],
+        '%s.plot3.png' % row['ID'],
         '%s.sums.csv' % row['ID'],
         '%s.grade.json' % row['ID'],
     )
@@ -281,7 +281,7 @@ def run_row_job(row):
         }
         obj_prefix = '%s/%s' % (subject_path, row['ID'])
         for idx, obj_suffix, mtype, cname in [
-                (0, 'plot2.png', 'image/png', 'Plot URL'),
+                (0, 'plot3.png', 'image/png', 'Plot URL'),
                 (1, 'sums.csv', 'text/csv', 'Sums URL'),
         ]:
             if row[cname] is None:
