@@ -47,6 +47,8 @@ def main(eventcsv, framecsv):
     cs_window = [ float(x) for x in os.getenv('FISHSPY_SUM_CSWINDOW', '0:0.10').split(':') ]
     assert(len(cs_window)==2)
 
+    cs_duty_cycle = os.getenv('FISHSPY_SUM_DUTY', 'false').lower() == 'true'
+
     track_height = int(os.getenv('TRACKHEIGHT', '6'))
 
     # use FISHSPY_SHOW_RAW to disable raw activity signal for pure binary pulse trains
@@ -79,6 +81,7 @@ Effective environment flags:
    FISHSPY_US_CS_RATIO=%s
    FISHSPY_TRIAL_COUNTS=%s
    FISHSPY_SUM_CSWINDOW=%s
+   FISHSPY_SUM_DUTY=%s
    FISHSPY_FPS=%s
    TRACKHEIGHT=%s
    FISHSPY_SHOW_RAW=%s
@@ -92,6 +95,7 @@ Effective environment flags:
     '%s' % us_cs_ratio,
     ','.join([ '%d' % x for x in trial_counts ]) if trial_counts else '',
     '%s:%s' % (cs_window[0], cs_window[1]),
+    str(cs_duty_cycle).lower(),
     '%d' % fps,
     '%d' % track_height,
     str(show_raw).lower(),
@@ -293,7 +297,7 @@ Effective environment flags:
     print ("%s plot space" % (img.shape,))
 
     csv_cycle_rows = [
-        ('cycle', 'type', 'cs_window_sum', 'pre_cs_act', 'post_cs_act', 'pre_us_act', 'post_us_act'),
+        ('cycle', 'type', ('cs_window_duty' if cs_duty_cycle else 'cs_window_sum'), 'pre_cs_act', 'post_cs_act', 'pre_us_act', 'post_us_act'),
     ]
 
     habit_rounds = []
@@ -368,7 +372,10 @@ Effective environment flags:
         cs_window_pix = [ int(d0 + preroll + dL * x) for x in cs_window ]
 
         # compute window-based measures
-        period_sums[period] = (tail_speed[cs_window_pix[0]:cs_window_pix[1]] * frame_activity[cs_window_pix[0]:cs_window_pix[1]]).sum()
+        if cs_duty_cycle:
+            period_sums[period] = frame_activity[cs_window_pix[0]:cs_window_pix[1]].sum() / (cs_window_pix[1] - cs_window_pix[0])
+        else:
+            period_sums[period] = (tail_speed[cs_window_pix[0]:cs_window_pix[1]] * frame_activity[cs_window_pix[0]:cs_window_pix[1]]).sum()
         act_pre_cs = np.abs(frame_activity[wG1:wCS,0]).sum() > 0
         act_cs = np.abs(frame_activity[wCS:w30,0]).sum() > 0
         act_pre_us = np.abs(frame_activity[wG2:wUS,0]).sum() > 0
