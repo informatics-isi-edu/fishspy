@@ -15,6 +15,91 @@ pos_bin_cnt = 5
 
 def main(eventcsv, framecsv):
 
+    # gather all environment-passed params up front, so we can print
+    # one summary report of effective parameters for this run.
+
+    # use X_SLICE=left:right to crop the X axis... 0:10:1 is full length of average test cycle
+    x_slice = [ np.clip(float(s), 0, 1) for s in os.getenv('X_SLICE', '0:1').split(':') ]
+
+    # use X_BINWIDTH=n to collapse n frames into one plot pixel in X axis
+    x_reduce = int(os.getenv('X_BINWIDTH', '7')) # 7x reduction appropriate for 20 fps?
+
+    # use FISHSPY_INVALID_BINS to ignore measurement bins
+    user_invalid = [ int(x) for x in os.getenv('FISHSPY_INVALID_BINS', '').split(',') if x ]
+
+    # use FISHSPY_US_CS_RATIO to force US period when not detected by light levels
+    us_cs_ratio = float(os.getenv('FISHSPY_US_CS_RATIO', '0.2'))
+
+    # use FISHSPY_FPS to override presumed framerate
+    fps = int(os.getenv('FISHSPY_FPS', '20'))
+
+    # use FISHSPY_TRIAL_COUNTS to force experiment phases when not detected by light levels
+    try:
+        trial_counts = os.getenv('FISHSPY_TRIAL_COUNTS')
+        trial_counts = trial_counts.split(',')
+    except:
+        trial_counts = None
+
+    if trial_counts is not None:
+        assert len(trial_counts) == 4, "FISHSPY_TRIAL_COUNTS must be comma-separated list of 4 decimal integers"
+        trial_counts = np.array([ int(x) for x in trial_counts ], dtype=np.int32)
+
+    cs_window = [ float(x) for x in os.getenv('FISHSPY_SUM_CSWINDOW', '0:0.10').split(':') ]
+    assert(len(cs_window)==2)
+
+    track_height = int(os.getenv('TRACKHEIGHT', '6'))
+
+    # use FISHSPY_SHOW_RAW to disable raw activity signal for pure binary pulse trains
+    show_raw = os.getenv('FISHSPY_SHOW_RAW', 'true').lower() == 'true'
+
+    def get_color(key, default):
+        envstr = os.getenv(key, default)
+        parts = envstr.split(',')
+        parts = [ float(x) for x in parts ]
+        if len(parts) > 1:
+            return np.array(parts, dtype=np.float32)
+        else:
+            return parts[0]
+
+    # use different default coloring for raw vs binary viz mode
+    if show_raw:
+        bg_color = get_color('COLOR_BG', '1,1,1')
+        cs_bg_color = get_color('COLOR_CS', '0.9,1,1')
+        us_bg_color = get_color('COLOR_US', '0.9,0.75,0.9')
+    else:
+        bg_color = get_color('COLOR_BG', '1,1,1')
+        cs_bg_color = get_color('COLOR_CS', '0.9,0.9,0.9')
+        us_bg_color = get_color('COLOR_US', '0.75,0.75,0.75')
+
+    print("""
+Effective environment flags:
+   X_SLICE=%s
+   X_BINWIDTH=%s
+   FISHSPY_INVALID_BINS=%s
+   FISHSPY_US_CS_RATIO=%s
+   FISHSPY_TRIAL_COUNTS=%s
+   FISHSPY_SUM_CSWINDOW=%s
+   FISHSPY_FPS=%s
+   TRACKHEIGHT=%s
+   FISHSPY_SHOW_RAW=%s
+   COLORBG=%s
+   COLORUS=%s
+   COLORCS=%s
+""" % (
+    '%s:%s' % (x_slice[0], x_slice[1]),
+    '%d' % x_reduce,
+    ','.join([ '%d' % x for x in user_invalid ]),
+    '%s' % us_cs_ratio,
+    ','.join([ '%d' % x for x in trial_counts ]) if trial_counts else '',
+    '%s:%s' % (cs_window[0], cs_window[1]),
+    '%d' % fps,
+    '%d' % track_height,
+    str(show_raw).lower(),
+    ','.join([ '%s' % x for x in bg_color ]),
+    ','.join([ '%s' % x for x in cs_bg_color ]),
+    ','.join([ '%s' % x for x in us_bg_color ]),
+))
+
     # extract CS periods as [ (CS_on_frame, US_on_frame or -1, off_frame), ... ]
     CS_periods = []
     
@@ -24,6 +109,7 @@ def main(eventcsv, framecsv):
     t1 = -1
     t2 = None
 
+    # load up events CSV to get detected CS period frame numbers etc.
     f = open(eventcsv, 'r')
     for row in csv.reader(f):
         if frameno_idx is None:
@@ -57,7 +143,6 @@ def main(eventcsv, framecsv):
         CS_cnt = CS_periods.shape[0]
         CS_max_duration = (CS_periods[:,2] - CS_periods[:,0]).max()
         CS_cycles = (CS_periods[1:,0] - CS_periods[0:-1,0])
-
         print ("%d periods, %d frames max duration, %f average cycle, %d median cycle" % (CS_cnt, CS_max_duration, CS_cycles.mean(), np.median(CS_cycles)))
     else:
         print ("found 0 CS periods... control experiment?")
@@ -66,7 +151,7 @@ def main(eventcsv, framecsv):
         CS_max_duration = None
         CS_cycles = None
 
-    # extract binned position data into array with shape FxB for B bins
+    # extract binned position data into array with shape FxB for F frames and B bins
     frame_bins = []
     frameno_idx = None
     pos_bin_idxs = None
@@ -86,20 +171,15 @@ def main(eventcsv, framecsv):
     print ("%d frames, %d position bins" % frame_bins.shape)
     print ("%d min/%d avg/%d max position spread" % (frame_bins.min(), frame_bins.mean(), frame_bins.max()))
 
-    # HACK:  guess at FPS for reduction ratio... assume k * 20 fps  and approximate total duration
-    fps = int(frame_bins.shape[0] / 200000.0) * 20
-
-    print ("guessed %s frames/sec" % fps)
-
-    # zeros mean invalid measurements
+    # zeros in input mean invalid measurements
     invalid = np.zeros(frame_bins.shape, dtype=np.bool)
 
     invalid = frame_bins == 0
+    # invalid status contaminates next frame since we cannot compute differences w/ only one valid number
     invalid[1:,:] += frame_bins[0:-1,:] == 0
     invalid[0,:] = 1
 
     # get optional invalid mask from user
-    user_invalid = [ int(x) for x in os.getenv('FISHSPY_INVALID_BINS', '').split(',') if x ]
     if len(user_invalid) < invalid.shape[1]:
         user_invalid.extend([ 0 for x in range(invalid.shape[1] - len(user_invalid)) ])
     elif len(user_invalid) > invalid.shape[1]:
@@ -136,6 +216,7 @@ def main(eventcsv, framecsv):
     # smear tail-speed over time
     temp = scipy.ndimage.filters.gaussian_filter(temp, sigma=0.4) # size is 6sigma - 1, sigma=1.35->diameter 7.1
 
+    # use log-scale intensity for raw tail speed viz...
     tail_speed = np.log1p(temp)
     tail_speed_range = (tail_speed.min(), tail_speed.max())
     tail_speed = (tail_speed - tail_speed_range[0]) * (1./(tail_speed_range[1] - tail_speed_range[0]))
@@ -147,18 +228,8 @@ def main(eventcsv, framecsv):
 
     print ("%d min/%d avg/%d max delta position spread" % (frame_delta_bins.min(), frame_delta_bins.mean(), frame_delta_bins.max()))
 
-    us_cs_ratio = float(os.getenv('FISHSPY_US_CS_RATIO', '0.2'))
     trial_periods = None
     static_trial_phases = False
-    try:
-        trial_counts = os.getenv('FISHSPY_TRIAL_COUNTS')
-        trial_counts = trial_counts.split(',')
-    except:
-        trial_counts = None
-
-    if trial_counts is not None:
-        assert len(trial_counts) == 4, "FISHSPY_TRIAL_COUNTS must be comma-separated list of 4 decimal integers"
-        trial_counts = np.array([ int(x) for x in trial_counts ], dtype=np.int32)
 
     # determine analysis and plot space
 
@@ -171,7 +242,7 @@ def main(eventcsv, framecsv):
         trial_periods = np.zeros( (4,), dtype=np.int32 )
         for cs, us, off in CS_periods:
             # HACK: assume valid US detection is at least 5 seconds * 20fps after CS detection
-            if (us - cs) <= 100:
+            if (us - cs) <= (5*fps):
                 if trial_periods[2] == trial_periods[1]:
                     trial_periods[1:] += 1
                 else:
@@ -217,17 +288,12 @@ def main(eventcsv, framecsv):
 
     assert width > 1000, "CS interval detection has failed to find a reasonable interval width"
 
-    bg_color = np.array([1, 1, 1], dtype=np.float32)
-    cs_bg_color = np.array([0.9, 0.9, 0.9], dtype=np.float32)
-    us_bg_color = np.array([0.75, 0.75, 0.75], dtype=np.float32)
-    track_height = 6
-
     img = np.full((CS_cnt, track_height, width, 3), bg_color, dtype=np.float32)
 
     print ("%s plot space" % (img.shape,))
 
     csv_cycle_rows = [
-        ('cycle', 'type', 'cs_1st_half_act_lvl', 'pre_cs_act', 'post_cs_act', 'pre_us_act', 'post_us_act'),
+        ('cycle', 'type', 'cs_window_sum', 'pre_cs_act', 'post_cs_act', 'pre_us_act', 'post_us_act'),
     ]
 
     habit_rounds = []
@@ -239,6 +305,7 @@ def main(eventcsv, framecsv):
 
     period_sums = np.zeros((CS_cnt,), dtype=np.float32)
 
+    # accumulate the data one round at a time, since sub-interval lengths vary per cycle
     for period in range(CS_cnt):
 
         # one data cycle
@@ -255,7 +322,7 @@ def main(eventcsv, framecsv):
         i0 = pad
         i1 = pad + dw
 
-        # measure cycle activity windows 0-75% and 80-130% relative to CS on/off boundaries
+        # measure cycle activity windows relative to CS on/off boundaries
         wCS = CS_periods[period, 0]
         wUS = CS_periods[period, 1]
         w100 = CS_periods[period, 2]
@@ -271,7 +338,7 @@ def main(eventcsv, framecsv):
 
         # HACK: assume valid US detection is at least 5 seconds * 20fps after CS detection
         cycle_type = 'CS'
-        if (CS_periods[period, 1] - CS_periods[period, 0]) > 100:
+        if (CS_periods[period, 1] - CS_periods[period, 0]) > (5*fps):
             us_boundaries_detected += 1
             # show unconditioned stimulus marker too
             US_offset = CS_periods[period,1] - CS_periods[period,0]
@@ -289,19 +356,25 @@ def main(eventcsv, framecsv):
             #
             cycle_type = 'CS+US'
 
-        # draw motion periods as pulses
-        img[period,0:-1,i0:i1,:] = (
-            img[period,0:-1,i0:i1,:] * np.logical_not(frame_activity[d0:d1])
-            # + frame_activity[d0:d1] * (1.0 - tail_speed[d0:d1])
-        )
+        if show_raw:
+            # HACK: try to mix raw signal with pulse train markers
+            tth = int(img.shape[1]//3) # track transition height for inactive/active pulses
+            img[period,tth:-1,i0:i1,:] *= (1.0 - tail_speed[d0:d1])
+            img[period,0:tth,i0:i1,:] *= (1.0 - tail_speed[d0:d1]) * frame_activity[d0:d1] + np.logical_not(frame_activity[d0:d1])
+        else:
+            img[period,0:-1,i0:i1,:] *= np.logical_not(frame_activity[d0:d1])
 
-        period_sums[period] = (tail_speed[d0:d0+int((d1-d0)//2)] * frame_activity[d0:d0+int((d1-d0)//2)]).sum()
+        # convert CS summing window ratios into actual window for this cycle
+        cs_window_pix = [ int(d0 + dL * x) for x in cs_window ]
 
+        # compute window-based measures
+        period_sums[period] = (tail_speed[cs_window_pix[0]:cs_window_pix[1]] * frame_activity[cs_window_pix[0]:cs_window_pix[1]]).sum()
         act_pre_cs = np.abs(frame_activity[wG1:wCS,0]).sum() > 0
         act_cs = np.abs(frame_activity[wCS:w30,0]).sum() > 0
         act_pre_us = np.abs(frame_activity[wG2:wUS,0]).sum() > 0
         act_us = np.abs(frame_activity[wUS:w130,0]).sum() > 0
 
+        # accumulate measures we will dump in CSV or JSON reports
         measures = (act_pre_cs, act_cs, act_pre_us, act_us)
         if trial_periods[0] <= period < trial_periods[1]:
             habit_rounds.append( measures )
@@ -316,28 +389,32 @@ def main(eventcsv, framecsv):
             (period, cycle_type, period_sums[period]) + measures
         )
 
-    dL = np.median(CS_periods[:,2] - CS_periods[:,0])
-    left_edge = int(preroll - dL//2)
-    right_edge = int(preroll+dL*3//2)
-
     print("Trial periods: %s" % (trial_periods))
-#    for i in range(1, trial_periods.shape[0] - 1):
-#        img[trial_periods[i]-1,pos_bin_cnt,::5,:] = 0.
 
+    # reshape track,bin dimensions into single Y axis for image
     img = img.reshape((CS_cnt * track_height, img.shape[2], 3))
-
     img_full = img
 
     print ("%s min/%s avg/%s max plot spread" % (img.min(), img.mean(), img.max()))
-    # 20 fps -> 7x reduce
-    x_reduce = 1 # int(img.shape[1] / 360.0)
 
-    img = nd.minimum_filter(img_full, size=(1,x_reduce,1))[:,left_edge:right_edge:x_reduce,:]
-    print("Reduction min filter input shape %s output shape %s" % (img_full.shape, img.shape))
+    assert (len(x_slice) == 2)
+    left_edge = int(np.clip(x_slice[0] * img.shape[1], 0, img.shape[1]-1))
+    right_edge = int(np.clip(x_slice[1] * img.shape[1], left_edge+1, img.shape[1]))
 
-    print ("%s plot image shape using %d x-reduction" % (img.shape, x_reduce))
+    if True:
+        # use minimum (darkest) color in each bin
+        img = nd.minimum_filter(img_full, size=(1,x_reduce,1))[:,left_edge:right_edge:x_reduce,:]
+    else:
+        # bin-average the colors
+        img = img[:,int(x_reduce*(left_edge//x_reduce)):int(x_reduce*(right_edge//x_reduce)),:]
+        for x in range(1,x_reduce):
+            img[:,0::x_reduce,:] += img[:,x::x_reduce,:]
+        img = (img[:,0::x_reduce,:]/x_reduce)
 
-    #img = np.sqrt(img)
+    print ("Using X_SLICE=%s:%s X_BINWIDTH=%d to reduce X axis" % (x_slice[0], x_slice[1], x_reduce))
+    print("Image shape %s reduced and cropped to shape %s" % (img_full.shape, img.shape))
+
+    # convert normalized float into 8-bit RGB
     img *= 255.0 / img[:,:,1].max()
     img = np.clip(img, 0.0, 255.0)
 
