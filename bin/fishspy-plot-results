@@ -93,7 +93,7 @@ Effective environment flags:
     '%d' % x_reduce,
     ','.join([ '%d' % x for x in user_invalid ]),
     '%s' % us_cs_ratio,
-    ','.join([ '%d' % x for x in trial_counts ]) if trial_counts else '',
+    ','.join([ '%d' % x for x in trial_counts ]) if trial_counts is not None else '',
     '%s:%s' % (cs_window[0], cs_window[1]),
     str(cs_duty_cycle).lower(),
     '%d' % fps,
