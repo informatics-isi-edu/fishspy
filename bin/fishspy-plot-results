@@ -365,7 +365,7 @@ Effective environment flags:
             img[period,0:-1,i0:i1,:] *= np.logical_not(frame_activity[d0:d1])
 
         # convert CS summing window ratios into actual window for this cycle
-        cs_window_pix = [ int(d0 + dL * x) for x in cs_window ]
+        cs_window_pix = [ int(d0 + preroll + dL * x) for x in cs_window ]
 
         # compute window-based measures
         period_sums[period] = (tail_speed[cs_window_pix[0]:cs_window_pix[1]] * frame_activity[cs_window_pix[0]:cs_window_pix[1]]).sum()
