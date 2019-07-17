@@ -13,6 +13,7 @@ setup(
     scripts=[
         "bin/fishspy-analyze-movie",
         "bin/fishspy-plot-results",
+        "bin/fishspy-plot-cohort",
         "bin/fishspy_worker"
     ],
     requires=["numpy", "scipy"],

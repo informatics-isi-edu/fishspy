@@ -1,0 +1,224 @@
+#!/usr/bin/python3
+
+#
+# Copyright 2018-2019 University of Southern California
+# Distributed under the (new) BSD License. See LICENSE.txt for more info.
+#
+
+import sys
+import os
+import os.path
+import atexit
+import shutil
+import tempfile
+import subprocess
+import csv
+
+from requests import HTTPError
+from deriva.core import ErmrestCatalog, HatracStore, get_credential, urlquote
+
+
+script_dir = os.getenv('SCRIPT_DIR', os.path.dirname(__file__))
+servername = os.getenv('SYNAPSE_SERVER', 'synapse.isrd.isi.edu')
+catalog_id = os.getenv('SYNAPSE_CATALOG', '1')
+dump_dir = os.path.abspath(os.getenv('DUMP_DIR', '.'))
+cache_dir = os.path.abspath(os.getenv('CACHE_DIR', './cache'))
+archive_dir_template = os.getenv('ARCHIVE_DIR_TEMPLATE', '%(dump_dir)s/%(cohort_rid)s/%(injection_status)s/%(cs_window_fixed)s')
+fishspy_sum_duty = os.getenv('FISHSPY_SUM_DUTY', 'true').lower() == 'true'
+
+working_dir = None
+startup_working_dir = os.getcwd()
+
+print('Effective SYNAPSE_SERVER="%s"' % servername)
+print('Effective SYNAPSE_CATALOG="%s"' % catalog_id)
+print('Effective SCRIPT_DIR="%s"' % script_dir)
+print('Effective CACHE_DIR="%s"' % cache_dir)
+print('Effective DUMP_DIR="%s"' % dump_dir)
+print('Effective ARCHIVE_DIR_TEMPLATE="%s"' % archive_dir_template)
+print('Effective FISHSPY_SUM_DUTY="%s"' % fishspy_sum_duty)
+
+credentials = get_credential(servername)
+catalog = ErmrestCatalog('https', servername, catalog_id, credentials)
+store = HatracStore('https', servername, credentials)
+
+# for use in Popen
+fnull = open(os.devnull, 'r+b')
+
+
+@atexit.register
+def cleanup():
+    global working_dir
+    if working_dir is not None:
+        sys.stderr.write('Purging working directory %s... ' % working_dir)
+        os.chdir(startup_working_dir)
+        shutil.rmtree(working_dir)
+        sys.stderr.write('done.\n')
+        working_dir = None
+
+def get_object(url, fname):
+    if not os.path.isdir(cache_dir):
+        raise ValueError('Cache dir "%s" does not exist' % cache_dir)
+    if os.path.isfile(fname):
+        print('Using cached %s' % fname)
+        return fname
+    store.get_obj(url, destfilename=fname)
+    print('Downloaded %s' % fname)
+    return fname
+
+def plot_one(cohort_rid, behavior_rid, subject, behavior, cs_windows):
+    global working_dir
+
+    fname_parts = {
+        'dump_dir': dump_dir,
+        'cohort_rid': cohort_rid,
+        'cache_dir': cache_dir,
+        'behavior_id': behavior['ID'],
+        'injection_status': 'injected' if subject['DNA Construct'] != 'none' else 'non-injected',
+    }
+        
+    events_fname = "%(cache_dir)s/%(behavior_id)s.events.csv" % fname_parts
+    frames_fname = "%(cache_dir)s/%(behavior_id)s.frame_measures.csv" % fname_parts
+    get_object(behavior['Events URL'], events_fname)
+    get_object(behavior['Frames URL'], frames_fname)
+
+    for csw_str in cs_windows: 
+        cs_window = csw_str.split(':')
+        if len(cs_window) != 2:
+            raise ValueError('Expected 2 fields in CS window "%s", not %s' % (csw_str, len(cs_window)))
+        try:
+            lower = float(cs_window[0])
+            upper = float(cs_window[1])
+        except Exception as e:
+            raise ValueError('Error decoding CS window "%s": %s' % (csw_str, e))
+
+        fname_parts['cs_window_fixed'] = 'w%3.3d_%3.3d' % (100 * lower, 100 * upper)
+        archive_dir = archive_dir_template % fname_parts
+        sums_fname = "%(behavior_id)s.sums.csv" % fname_parts
+        os.makedirs(archive_dir, exist_ok=True)
+
+        result = (cohort_rid, fname_parts['injection_status'], behavior['ID'], str(lower), str(upper), archive_dir, sums_fname)
+
+        if not os.path.isfile("%s/%s" % (archive_dir, sums_fname)):
+            try:
+                working_dir = tempfile.mkdtemp()
+                os.chdir(working_dir)
+                sys.stderr.write('\nUsing working directory %s for Behavior ID=%s CS window "%s"\n' % (working_dir, behavior['ID'], csw_str))
+
+                env = { 'FISHSPY_TRIAL_COUNTS': behavior['Trial Counts'] } if behavior['Trial Counts'] else {}
+                env.update({
+                    'FISHSPY_SUM_CSWINDOW': '%f:%f' % (lower, upper),
+                    'FISHSPY_SUM_DUTY': str(fishspy_sum_duty).lower(),
+                })
+                command = [
+                    '%s/fishspy-plot-results' % script_dir,
+                    events_fname,
+                    frames_fname,
+                ]
+                plot = subprocess.Popen(command, stdin=fnull, env=env)
+                code = plot.wait()
+                del plot
+                if code != 0:
+                    raise ValueError('fishpy-plot-results returned non-zero %s for Behavior ID=%s' % (code, behavior['ID']))
+
+                shutil.move(sums_fname, archive_dir)
+                print('Saved %s to %s' % (sums_fname, archive_dir))
+                yield result
+
+            finally:
+                cleanup()
+
+        else:
+            print('Using previously saved %s/%s.' % (archive_dir, sums_fname))
+            yield result
+
+def cli(cohort_rid, *cs_windows):
+    """Produce plot results for Cohort Analysis <-> Subject <- Behavior records for CS summation windows.
+
+       Arguments:
+         cohort_rid: Cohort Analysis RID
+
+       Only directly associated subjects are considered, NOT subjects
+       linked implicitly through associated pair studies. Studies
+       lacking Events URL or Frames URL values are ignored.
+
+       See list of "effective environment parameters" for configurable options.
+
+    """
+    url_parts = {
+        k: urlquote(v)
+        for k, v in {
+                'ca_table': 'Cohort Analysis',
+                'cohort_rid': cohort_rid,
+                'ca_subject_table': 'Cohort Analysis_Subject',
+                'subject_table': 'Subject',
+                'behavior_table': 'Behavior',
+                'events_col': 'Events URL',
+                'frames_col': 'Frames URL',
+        }.items()
+    }
+
+    if len(cs_windows) < 1:
+        cs_windows = [ '0:0.1' ]
+        print('Using default CS window %s.' % (cs_windows[0]))
+
+    r = catalog.get('/entity/%(ca_table)s/RID=%(cohort_rid)s' % url_parts)
+    r.raise_for_status()
+    rows = r.json()
+    if len(rows) != 1:
+        raise ValueError('Cohort Analysis RID=%s not found.' % cohort_rid)
+
+    saved_results = []
+    
+    r = catalog.get(
+        ('/attributegroup/%(ca_table)s/RID=%(cohort_rid)s'
+         '/%(ca_subject_table)s/S:=%(subject_table)s'
+         '/B:=%(behavior_table)s'
+         '/!%(events_col)s::null::/!%(frames_col)s::null::'
+         '/RID;behavior:=array(B:*),subject:=array(S:*)'
+        ) % url_parts
+    )
+    r.raise_for_status()
+    rows = r.json()
+    for row in rows:
+        saved_results.extend(list(plot_one(cohort_rid, row['RID'], row['subject'][0], row['behavior'][0], cs_windows)))
+
+    with open('%s/fishspy-plot-cohort-summary.csv' % cohort_rid, 'w') as outf:
+        writer = csv.writer(outf)
+        writer.writerow(
+            ('cohort_rid', 'injection_status', 'behavior_id', 'cs_window_lower', 'cs_window_upper', 'archive_dir', 'sums_fname')
+        )
+        for result in saved_results:
+            writer.writerow(result)
+        del writer
+
+    return 0
+
+if __name__ == '__main__':
+    try:
+        try:
+            status = cli(*sys.argv[1:])
+            sys.exit(status)
+        except HTTPError as e:
+            if hasattr(e, 'response'):
+                if e.response.status_code == 401:
+                    sys.stderr.write("""
+ERROR: Please use deriva-auth to authenticate with the server %s first.
+""" % (
+    servername,
+))
+                    sys.exit(1)
+            raise
+    except Exception as e:
+        sys.stderr.write("""
+ERROR: %s
+usage: fishspy-plot-cohort <cohort_rid> <cs_sum_window>...
+
+%s
+
+""" % (
+    e,
+    cli.__doc__
+))
+        raise
+        sys.exit(1)
+
