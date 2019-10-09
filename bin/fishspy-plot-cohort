@@ -24,10 +24,28 @@ catalog_id = os.getenv('SYNAPSE_CATALOG', '1')
 dump_dir = os.path.abspath(os.getenv('DUMP_DIR', '.'))
 cache_dir = os.path.abspath(os.getenv('CACHE_DIR', './cache'))
 archive_dir_template = os.getenv('ARCHIVE_DIR_TEMPLATE', '%(dump_dir)s/%(cohort_rid)s/%(injection_status)s/%(cs_window_fixed)s')
-fishspy_sum_duty = os.getenv('FISHSPY_SUM_DUTY', 'true').lower() == 'true'
 
 working_dir = None
 startup_working_dir = os.getcwd()
+
+plot_env_passthrough_defaults = {
+    'COLOR_BG': '',
+    'COLOR_CS': '',
+    'COLOR_US': '',
+    'FISHSPY_FPS': '20',
+    'FISHSPY_INVALID_BINS': '',
+    'FISHSPY_SHOW_RAW': 'false',
+    'FISHSPY_SUM_DUTY': 'true',
+    'FISHSPY_TRIAL_COUNTS': '',
+    'FISHSPY_US_CS_RATIO': '0.2',
+    'TRACKHEIGHT': '6',
+    'X_BINWIDTH': '7',
+    'X_SLICE': '0:1',
+}
+plot_env_passthrough = {
+    k: os.getenv(k, v)
+    for k, v in plot_env_passthrough_defaults.items()
+}
 
 print('Effective SYNAPSE_SERVER="%s"' % servername)
 print('Effective SYNAPSE_CATALOG="%s"' % catalog_id)
@@ -35,7 +53,8 @@ print('Effective SCRIPT_DIR="%s"' % script_dir)
 print('Effective CACHE_DIR="%s"' % cache_dir)
 print('Effective DUMP_DIR="%s"' % dump_dir)
 print('Effective ARCHIVE_DIR_TEMPLATE="%s"' % archive_dir_template)
-print('Effective FISHSPY_SUM_DUTY="%s"' % fishspy_sum_duty)
+for k, v in sorted(plot_env_passthrough.items()):
+    print('Effective %s="%s"' % (k, v))
 
 credentials = get_credential(servername)
 catalog = ErmrestCatalog('https', servername, catalog_id, credentials)
@@ -94,6 +113,7 @@ def plot_one(cohort_rid, behavior_rid, subject, behavior, cs_windows):
         fname_parts['cs_window_fixed'] = 'w%3.3d_%3.3d' % (100 * lower, 100 * upper)
         archive_dir = archive_dir_template % fname_parts
         sums_fname = "%(behavior_id)s.sums.csv" % fname_parts
+        plot_fname = "%(behavior_id)s.plot3.png" % fname_parts
         os.makedirs(archive_dir, exist_ok=True)
 
         result = (cohort_rid, fname_parts['injection_status'], behavior['ID'], str(lower), str(upper), archive_dir, sums_fname)
@@ -104,11 +124,15 @@ def plot_one(cohort_rid, behavior_rid, subject, behavior, cs_windows):
                 os.chdir(working_dir)
                 sys.stderr.write('\nUsing working directory %s for Behavior ID=%s CS window "%s"\n' % (working_dir, behavior['ID'], csw_str))
 
-                env = { 'FISHSPY_TRIAL_COUNTS': behavior['Trial Counts'] } if behavior['Trial Counts'] else {}
+                env = dict(plot_env_passthrough)
+                env.update(
+                    { 'FISHSPY_TRIAL_COUNTS': behavior['Trial Counts'] } if behavior['Trial Counts'] else {}
+                )
                 env.update({
                     'FISHSPY_SUM_CSWINDOW': '%f:%f' % (lower, upper),
-                    'FISHSPY_SUM_DUTY': str(fishspy_sum_duty).lower(),
                 })
+                # treat empty strings as if None/absent for passthrough
+                env = { k: v for k, v in env.items() if v }
                 command = [
                     '%s/fishspy-plot-results' % script_dir,
                     events_fname,
@@ -120,8 +144,9 @@ def plot_one(cohort_rid, behavior_rid, subject, behavior, cs_windows):
                 if code != 0:
                     raise ValueError('fishpy-plot-results returned non-zero %s for Behavior ID=%s' % (code, behavior['ID']))
 
-                shutil.move(sums_fname, archive_dir)
-                print('Saved %s to %s' % (sums_fname, archive_dir))
+                for fname in [sums_fname, plot_fname]:
+                    shutil.move(fname, archive_dir)
+                    print('Saved %s to %s' % (fname, archive_dir))
                 yield result
 
             finally:
@@ -135,13 +160,30 @@ def cli(cohort_rid, *cs_windows):
     """Produce plot results for Cohort Analysis <-> Subject <- Behavior records for CS summation windows.
 
        Arguments:
-         cohort_rid: Cohort Analysis RID
+         cohort_rid: Cohort RID
+         *cs_windows: zero or more "lower:upper" ranges 
 
        Only directly associated subjects are considered, NOT subjects
        linked implicitly through associated pair studies. Studies
        lacking Events URL or Frames URL values are ignored.
 
-       See list of "effective environment parameters" for configurable options.
+       The optional "lower:upper" cs-windows provided after the cohort
+       RID are used to configure the SYNSPY_SUM_CSWINDOW parameter to
+       the plot script. The plot script will be executed once per
+       provided window, and results separately collected. If not
+       specified, the plot script is executed once on a default
+       window.
+
+       See list of "effective environment parameters" for other
+       configurable options. When passing parameters through to
+       fishspy-plot-results, an empty string "" will be interpreted as
+       absence so the parameter will not be set, requesting the plot
+       to use default behaviors.
+
+       The FISHSPY_TRIAL_COUNTS variable is an exceptional case. If a
+       value is present in the Behavior record, it will take
+       precedence over the environment parameter passed to this
+       script.
 
     """
     url_parts = {

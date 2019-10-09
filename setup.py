@@ -9,7 +9,7 @@ from distutils.core import setup
 setup(
     name="fishspy",
     description="zebrafish video analysis",
-    version="0.1-prerelease",
+    version="20191009.0",
     scripts=[
         "bin/fishspy-analyze-movie",
         "bin/fishspy-plot-results",
@@ -26,5 +26,5 @@ setup(
         'License :: OSI Approved :: BSD License',
         'Operating System :: POSIX',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3.7',
     ])
