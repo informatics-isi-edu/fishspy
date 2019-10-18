@@ -9,7 +9,7 @@ from distutils.core import setup
 setup(
     name="fishspy",
     description="zebrafish video analysis",
-    version="20191017.0",
+    version="20191017.1",
     scripts=[
         "bin/fishspy-analyze-movie",
         "bin/fishspy-plot-results",

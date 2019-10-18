@@ -224,7 +224,7 @@ def cli(cohort_rid, *cs_windows):
     for row in rows:
         saved_results.extend(list(plot_one(cohort_rid, row['RID'], row['subject'][0], row['behavior'][0], cs_windows)))
 
-    with open('%s/fishspy-plot-cohort-summary.csv' % cohort_rid, 'w') as outf:
+    with open('%s/%s/fishspy-plot-cohort-summary.csv' % (dump_dir, cohort_rid), 'w') as outf:
         writer = csv.writer(outf)
         writer.writerow(
             ('cohort_rid', 'injection_status', 'behavior_id', 'cs_window_lower', 'cs_window_upper', 'archive_dir', 'sums_fname', 'std_len')
