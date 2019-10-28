@@ -91,7 +91,7 @@ def plot_one(cohort_rid, behavior_rid, subject, behavior, cs_windows):
         'dump_dir': dump_dir,
         'cohort_rid': cohort_rid,
         'cache_dir': cache_dir,
-        'behavior_id': behavior['ID'],
+        'behavior_id': behavior['ID'] if behavior['ID'] else ('Behavior_%s' % behavior_rid),
         'injection_status': 'injected' if subject['DNA Construct'] != 'none' else 'non-injected',
     }
         
@@ -116,7 +116,7 @@ def plot_one(cohort_rid, behavior_rid, subject, behavior, cs_windows):
         plot_fname = "%(behavior_id)s.plot3.png" % fname_parts
         os.makedirs(archive_dir, exist_ok=True)
 
-        result = (cohort_rid, fname_parts['injection_status'], behavior['ID'], str(lower), str(upper), archive_dir, sums_fname, behavior['Std. Len.'])
+        result = (cohort_rid, fname_parts['injection_status'], fname_parts['behavior_id'], str(lower), str(upper), archive_dir, sums_fname, behavior['Std. Len.'])
 
         if not os.path.isfile("%s/%s" % (archive_dir, sums_fname)):
             try:
