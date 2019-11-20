@@ -9,14 +9,15 @@ from distutils.core import setup
 setup(
     name="fishspy",
     description="zebrafish video analysis",
-    version="20191017.1",
+    version="20191120.0",
     scripts=[
         "bin/fishspy-analyze-movie",
         "bin/fishspy-plot-results",
         "bin/fishspy-plot-cohort",
         "bin/fishspy_worker"
     ],
-    requires=["numpy", "scipy"],
+    requires=["numpy", "scipy", "deriva"],
+    install_requires=['deriva>=1.0'],
     maintainer_email="support@misd.isi.edu",
     license='(new) BSD',
     classifiers=[
