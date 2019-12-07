@@ -2,7 +2,7 @@
 
 import json
 import pika
-from deriva.core import PollingErmrestCatalog, HatracStore, urlquote
+from deriva.core import PollingErmrestCatalog, HatracStore, urlquote, get_credential, DEFAULT_CREDENTIAL_FILE
 import os
 import re
 import sys
@@ -22,9 +22,10 @@ servername = os.getenv('FISHSPY_SERVER', platform.uname()[1])
 scriptdir = os.getenv('FISHSPY_PATH', '')
 scriptdir = '%s/' % scriptdir if scriptdir else ''
 
-# secret session cookie
-credfile = os.getenv('FISHSPY_CREDENTIALS', 'credentials.json')
-credentials = json.load(open(credfile))
+credentials = get_credential(
+    servername,
+    credential_file=os.getenv('FISHSPY_CREDENTIALS', DEFAULT_CREDENTIAL_FILE)
+)
 
 # handle to /dev/null we can use in Popen() calls below...
 fnull = open(os.devnull, 'r+b')
@@ -86,7 +87,7 @@ def analyze_movie(row, debug_video=False):
          debug:  debug M4V relative filename or None
     """
     raw_url = row['Raw URL']
-    movie_id = row['ID']
+    movie_id = 'Behavior_%s' % row['RID']
     raw_filename = '%s.m4v' % movie_id
 
     # download the content to temp dir
@@ -108,7 +109,7 @@ def analyze_movie(row, debug_video=False):
 
     # allow supported parameters to be set per instrument
     r = catalog.get(
-        '/entity/Synapse:FScope/ID=%s' % urlquote(row['FScope']),
+        '/entity/Zebrafish:Behavior/RID=%s/Synapse:FScope' % urlquote(row['RID']),
     )
     r.raise_for_status()
     analysis_params = r.json()[0]['Analysis Parameters']
@@ -149,8 +150,9 @@ def plot_movie_local(row, events_filename, frames_filename):
        Result: local filenames for (plot PNG, plot3 PNG, sums CSV, grade JSON)
 
     """
-    assert events_filename == ('%s.events.csv' % row['ID'])
-    assert frames_filename == ('%s.frame_measures.csv' % row['ID'])
+    movie_id = 'Behavior_%s' % row['RID']
+    assert events_filename == ('%s.events.csv' % movie_id)
+    assert frames_filename == ('%s.frame_measures.csv' % movie_id)
 
     command = [
         scriptdir + 'fishspy-plot-results',
@@ -167,9 +169,9 @@ def plot_movie_local(row, events_filename, frames_filename):
         raise WorkerRuntimeError('Non-zero plot exit status %s!' % code)
 
     return (
-        '%s.plot3.png' % row['ID'],
-        '%s.sums.csv' % row['ID'],
-        '%s.grade.json' % row['ID'],
+        '%s.plot3.png' % movie_id,
+        '%s.sums.csv' % movie_id,
+        '%s.grade.json' % movie_id,
     )
 
 def plot_movie(row):
@@ -181,7 +183,7 @@ def plot_movie(row):
        Result: local filenames for (plot PNG, sums CSV)
 
     """
-    movie_id = row['ID']
+    movie_id = 'Behavior_%s' % row['RID']
 
     events_filename = '%s.events.csv' % movie_id
     frames_filename = '%s.frame_measures.csv' % movie_id
@@ -205,7 +207,7 @@ def run_row_job(row):
     """
     global working_dir
     
-    sys.stderr.write('Claimed job %s.\n' % row['ID'])
+    sys.stderr.write('Claimed job %s.\n' % row['RID'])
 
     working_dir = tempfile.mkdtemp(dir="/var/tmp")
     os.chdir(working_dir)
@@ -216,44 +218,41 @@ def run_row_job(row):
             raise WorkerRuntimeError('empty Raw URL')
 
         # where we put stuff in hatrac
-        subject_path = '/hatrac/Zf/%s' % row['Subject']
+        subject_path = '/hatrac/Zf/Zf_%s' % row['Subject']
 
         if row['Events URL'] is None or row['Frames URL'] is None:
             # download and analyze raw movie
             analyze_outputs = analyze_movie(row)
 
             # upload analysis results
-            events_obj = '%s/%s.events.csv' % (subject_path, row['ID'])
+            events_obj = '%s/Behavior_%s.events.csv' % (subject_path, row['RID'])
             events_url = store.put_loc(events_obj, analyze_outputs[0], headers={'Content-Type': 'text/csv'})
 
-            frames_obj = '%s/%s.frame_measures.csv' % (subject_path, row['ID'])
+            frames_obj = '%s/Behavior_%s.frame_measures.csv' % (subject_path, row['RID'])
             frames_url = store.put_loc(frames_obj, analyze_outputs[1], headers={'Content-Type': 'text/csv'})
 
             updated_row = {
-                "ID": row["ID"],
+                "RID": row["RID"],
                 "Status": "processed",
                 "Events URL": events_url,
                 "Frames URL": frames_url,
-                "Events File Type": "csv",
-                "Frames File Type": "csv"
             }
             
             if analyze_outputs[2]:
                 # may or may not have generated debug movie?
-                debug_obj = '%s/%s.debug.m4v' % (subject_path, row['ID'])
+                debug_obj = '%s/Behavior_%s.debug.m4v' % (subject_path, row['RID'])
                 debug_url = store.put_loc(debug_obj, analyze_outputs[2], headers={'Content-Type': 'video/x-m4v'})
 
                 updated_row.update({
-                    "Debug URL": debug_url,
-                    "Debug File Type": "m4v"
+                    "Debug URL": debug_url
                 })
 
             # record analysis results in ermrest
             catalog.put(
-                '/attributegroup/Zebrafish:Behavior/ID;%s' % ','.join([
+                '/attributegroup/Zebrafish:Behavior/RID;%s' % ','.join([
                     urlquote(col, safe='')
                     for col in updated_row.keys()
-                    if col != 'ID'
+                    if col != 'RID'
                 ]),
                 json=[updated_row]
             )
@@ -276,10 +275,10 @@ def run_row_job(row):
 
         # upload plot outputs
         updated_row = {
-            "ID": row["ID"],
+            "RID": row["RID"],
             "Status": "processed",
         }
-        obj_prefix = '%s/%s' % (subject_path, row['ID'])
+        obj_prefix = '%s/Behavior_%s' % (subject_path, row['RID'])
         for idx, obj_suffix, mtype, cname in [
                 (0, 'plot3.png', 'image/png', 'Plot URL'),
                 (1, 'sums.csv', 'text/csv', 'Sums URL'),
@@ -302,10 +301,10 @@ def run_row_job(row):
 
         # record plot result in ermrest
         catalog.put(
-            '/attributegroup/Zebrafish:Behavior/ID;%s' % ','.join([
+            '/attributegroup/Zebrafish:Behavior/RID;%s' % ','.join([
                 urlquote(col, safe='')
                 for col in updated_row.keys()
-                if col != 'ID'
+                if col != 'RID'
             ]),
             json=[updated_row]
         )
@@ -340,13 +339,13 @@ def look_for_work():
     global idle_etag
 
     claimable_work_url = '/entity/Zebrafish:Behavior/!Raw%20URL::null::/!FScope::null::/Events%20URL::null::;Frames%20URL::null::;Plot%20URL::null::;Sums%20URL::null::;Grade::null::/Status::null::;Status=null?limit=1'
-    status_update_url = '/attributegroup/Zebrafish:Behavior/ID;Status'
+    status_update_url = '/attributegroup/Zebrafish:Behavior/RID;Status'
     
     # this handled concurrent update for us to safely and efficiently claim a record
     idle_etag, batch = catalog.state_change_once(
         claimable_work_url,
         status_update_url,
-        lambda row: {'ID': row['ID'], 'Status': "in progress"},
+        lambda row: {'RID': row['RID'], 'Status': "in progress"},
         idle_etag
     )
 
@@ -356,7 +355,7 @@ def look_for_work():
             run_row_job(row)
         except Exception as e:
             # TODO: eat some exceptions and return True to continue?
-            catalog.put(status_update_url, json=[{'ID': row['ID'], 'Status': "failed: %s" % e }])
+            catalog.put(status_update_url, json=[{'RID': row['RID'], 'Status': "failed: %s" % e }])
             raise
 
         return True

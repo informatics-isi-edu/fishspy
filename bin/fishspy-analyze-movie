@@ -96,7 +96,7 @@ def main(moviename):
         m = re.match('^(?P<id>[^.]+)[.]m4v$', os.path.basename(moviename))
         movie_id = m.groupdict()['id']
     except:
-        raise ValueError('Movie name "%s" should be in form "ID.m4v" with valid experiment identifier.' % moviename)
+        raise ValueError('Movie name "%s" should be in form "Behavior_{RID}.m4v" (or "{ID}.m4v" for legacy records).' % moviename)
 
     # this produces a JSON metadata document about the movie on standard output
     probecmd = [
