@@ -91,7 +91,7 @@ def plot_one(cohort_rid, behavior_rid, subject, behavior, cs_windows):
         'dump_dir': dump_dir,
         'cohort_rid': cohort_rid,
         'cache_dir': cache_dir,
-        'behavior_id': behavior['ID'] if behavior['ID'] else ('Behavior_%s' % behavior_rid),
+        'behavior_id': 'Behavior_%s' % behavior_rid,
         'injection_status': 'injected' if subject['DNA Construct'] != 'none' else 'non-injected',
     }
         
@@ -122,7 +122,7 @@ def plot_one(cohort_rid, behavior_rid, subject, behavior, cs_windows):
             try:
                 working_dir = tempfile.mkdtemp()
                 os.chdir(working_dir)
-                sys.stderr.write('\nUsing working directory %s for Behavior ID=%s CS window "%s"\n' % (working_dir, behavior['ID'], csw_str))
+                sys.stderr.write('\nUsing working directory %s for Behavior RID=%s CS window "%s"\n' % (working_dir, behavior_rid, csw_str))
 
                 env = dict(plot_env_passthrough)
                 env.update(
@@ -142,7 +142,7 @@ def plot_one(cohort_rid, behavior_rid, subject, behavior, cs_windows):
                 code = plot.wait()
                 del plot
                 if code != 0:
-                    raise ValueError('fishpy-plot-results returned non-zero %s for Behavior ID=%s' % (code, behavior['ID']))
+                    raise ValueError('fishpy-plot-results returned non-zero %s for Behavior RID=%s' % (code, behavior_rid))
 
                 for fname in [sums_fname, plot_fname]:
                     shutil.move(fname, archive_dir)
@@ -157,15 +157,15 @@ def plot_one(cohort_rid, behavior_rid, subject, behavior, cs_windows):
             yield result
 
 def cli(cohort_rid, *cs_windows):
-    """Produce plot results for Cohort Analysis <-> Subject <- Behavior records for CS summation windows.
+    """Produce plot results for Cohort Analysis <-> Behavior records for CS summation windows.
 
        Arguments:
-         cohort_rid: Cohort RID
+         cohort_rid: Cohort RID (with fallback to try it as a Behavior record key)
          *cs_windows: zero or more "lower:upper" ranges 
 
-       Only directly associated subjects are considered, NOT subjects
-       linked implicitly through associated pair studies. Studies
-       lacking Events URL or Frames URL values are ignored.
+       Only directly associated behavior studies are considered, NOT
+       considering other subject-based linkage. Studies lacking Events
+       URL or Frames URL values are ignored.
 
        The optional "lower:upper" cs-windows provided after the cohort
        RID are used to configure the SYNSPY_SUM_CSWINDOW parameter to
@@ -189,9 +189,9 @@ def cli(cohort_rid, *cs_windows):
     url_parts = {
         k: urlquote(v)
         for k, v in {
-                'ca_table': 'Cohort Analysis',
+                'ca_table': 'Cohort',
                 'cohort_rid': cohort_rid,
-                'ca_subject_table': 'Cohort Analysis_Subject',
+                'ca_behavior_table': 'Cohort_Behavior',
                 'subject_table': 'Subject',
                 'behavior_table': 'Behavior',
                 'events_col': 'Events URL',
@@ -203,20 +203,38 @@ def cli(cohort_rid, *cs_windows):
         cs_windows = [ '0:0.1' ]
         print('Using default CS window %s.' % (cs_windows[0]))
 
+    # walk from cohort record to find behavior records
+    behavior_query_template = (
+        '/attributegroup/%(ca_table)s/RID=%(cohort_rid)s'
+        '/%(ca_behavior_table)s/B:=%(behavior_table)s'
+    )
+
     r = catalog.get('/entity/%(ca_table)s/RID=%(cohort_rid)s' % url_parts)
     r.raise_for_status()
     rows = r.json()
     if len(rows) != 1:
-        raise ValueError('Cohort Analysis RID=%s not found.' % cohort_rid)
+        # not a valid cohort RID...
+        # see if we can use the supplied id to find 1 record instead of 1 cohort?
+        r = catalog.get('/entity/%(behavior_table)s/RID=%(cohort_rid)s;ID=%(cohort_rid)s' % url_parts)
+        r.raise_for_status()
+        rows = r.json()
+        if len(rows) == 1:
+            # use supplied identifier as a behavior record identifier
+            behavior_query_template = (
+                '/attributegroup/B:=%(behavior_table)s/RID=%(cohort_rid)s;ID=%(cohort_rid)s'
+            )
+            cohort_rid = 'unknown'
+        else:
+            raise ValueError('Neither Cohort nor Behavior with RID=%s could be found.' % cohort_rid)
 
     saved_results = []
     
     r = catalog.get(
-        ('/attributegroup/%(ca_table)s/RID=%(cohort_rid)s'
-         '/%(ca_subject_table)s/S:=%(subject_table)s'
-         '/B:=%(behavior_table)s'
-         '/!%(events_col)s::null::/!%(frames_col)s::null::'
-         '/RID;behavior:=array(B:*),subject:=array(S:*)'
+        (
+            behavior_query_template +
+            '/S:=%(subject_table)s/$B'
+            '/!%(events_col)s::null::/!%(frames_col)s::null::'
+            '/RID;behavior:=array(B:*),subject:=array(S:*)'
         ) % url_parts
     )
     r.raise_for_status()
