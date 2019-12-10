@@ -13,6 +13,7 @@ import shutil
 import tempfile
 import subprocess
 import csv
+import json
 
 from requests import HTTPError
 from deriva.core import ErmrestCatalog, HatracStore, get_credential, urlquote
@@ -24,6 +25,7 @@ catalog_id = os.getenv('SYNAPSE_CATALOG', '1')
 dump_dir = os.path.abspath(os.getenv('DUMP_DIR', '.'))
 cache_dir = os.path.abspath(os.getenv('CACHE_DIR', './cache'))
 archive_dir_template = os.getenv('ARCHIVE_DIR_TEMPLATE', '%(dump_dir)s/%(cohort_rid)s/%(injection_status)s/%(cs_window_fixed)s')
+upload_results = json.loads(os.getenv('UPLOAD_RESULTS', '[]'))
 
 working_dir = None
 startup_working_dir = os.getcwd()
@@ -53,6 +55,7 @@ print('Effective SCRIPT_DIR="%s"' % script_dir)
 print('Effective CACHE_DIR="%s"' % cache_dir)
 print('Effective DUMP_DIR="%s"' % dump_dir)
 print('Effective ARCHIVE_DIR_TEMPLATE="%s"' % archive_dir_template)
+print("Effective UPLOAD_RESULTS='%s'" %  json.dumps(upload_results))
 for k, v in sorted(plot_env_passthrough.items()):
     print('Effective %s="%s"' % (k, v))
 
@@ -84,6 +87,27 @@ def get_object(url, fname):
     print('Downloaded %s' % fname)
     return fname
 
+def put_object_idempotent(url, fname, content_type):
+    if not os.path.isfile(fname):
+        raise ValueError('Upload source file "%s" does not exist' % fname)
+    if content_type not in {'image/png','text/csv'}:
+        raise ValueError('Upload unsupported content-type "%s"' % content_type)
+    old_obj = None
+    try:
+        r = store.head(url)
+        if r.status_code == 200 and 'content-location' in r.headers:
+            old_obj = r.headers['content-location']
+    except:
+        pass
+    new_obj = store.put_obj(url, fname, headers={'content-type': content_type})
+    if old_obj is None:
+        print('Uploaded new object: %s (none previously found)' % new_obj)
+    elif old_obj != new_obj:
+        print('Uploaded new object: %s (supercedes %s)' % (new_obj, old_obj))
+    else:
+        print('Retained existing object: %s' % old_obj)
+    return new_obj
+
 def plot_one(cohort_rid, behavior_rid, subject, behavior, cs_windows):
     global working_dir
 
@@ -92,6 +116,7 @@ def plot_one(cohort_rid, behavior_rid, subject, behavior, cs_windows):
         'cohort_rid': cohort_rid,
         'cache_dir': cache_dir,
         'behavior_id': 'Behavior_%s' % behavior_rid,
+        'subject_rid': subject['RID'],
         'injection_status': 'injected' if subject['DNA Construct'] != 'none' else 'non-injected',
     }
         
@@ -112,12 +137,12 @@ def plot_one(cohort_rid, behavior_rid, subject, behavior, cs_windows):
 
         fname_parts['cs_window_fixed'] = 'w%3.3d_%3.3d' % (100 * lower, 100 * upper)
         archive_dir = archive_dir_template % fname_parts
+        object_ns = "/hatrac/Zf/Zf_%(subject_rid)s/" % fname_parts
         sums_fname = "%(behavior_id)s.sums.csv" % fname_parts
         plot_fname = "%(behavior_id)s.plot3.png" % fname_parts
         os.makedirs(archive_dir, exist_ok=True)
 
         result = (cohort_rid, fname_parts['injection_status'], fname_parts['behavior_id'], str(lower), str(upper), archive_dir, sums_fname, behavior['Std. Len.'])
-
         if not os.path.isfile("%s/%s" % (archive_dir, sums_fname)):
             try:
                 working_dir = tempfile.mkdtemp()
@@ -147,14 +172,38 @@ def plot_one(cohort_rid, behavior_rid, subject, behavior, cs_windows):
                 for fname in [sums_fname, plot_fname]:
                     shutil.move(fname, archive_dir)
                     print('Saved %s to %s' % (fname, archive_dir))
-                yield result
 
             finally:
                 cleanup()
 
         else:
             print('Using previously saved %s/%s.' % (archive_dir, sums_fname))
-            yield result
+
+        # retire cached and new results the same way...
+        upload_rules = {
+            'sums': ('Sums URL', sums_fname, 'text/csv'),
+            'plot': ('Plot URL', plot_fname, 'image/png'),
+        }
+        record_updates = {}
+        for k in upload_rules:
+            if k in upload_results:
+                # user asked us to upload this kind of result
+                colname, fname, content_type = upload_rules[k]
+                new_obj = put_object_idempotent(object_ns + fname, archive_dir + '/' + fname, content_type)
+                if behavior[colname] != new_obj:
+                    record_updates[colname] = new_obj
+                else:
+                    print('Skip upload of %s result: %s is unchanged' % (k, new_obj))
+
+        if record_updates:
+            record_updates['RID'] = behavior_rid
+            print('Updating record:\n%s' % json.dumps(record_updates, indent=2))
+            catalog.put(
+                '/attributegroup/Behavior/RID;%s' % ','.join([ urlquote(k) for k in record_updates if k != 'RID' ]),
+                json=[record_updates],
+            ).raise_for_status()
+
+        yield result
 
 def cli(cohort_rid, *cs_windows):
     """Produce plot results for Cohort Analysis <-> Behavior records for CS summation windows.
