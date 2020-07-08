@@ -10,9 +10,11 @@ import numpy as np
 import h5py
 import scipy.ndimage as nd
 from scipy.ndimage import gaussian_filter, maximum_filter1d, minimum_filter1d
-from scipy.misc import toimage
 from PIL import Image, ImageDraw, ImageFont
 import re
+
+def toimage(*args):
+    return PIL.Image.fromarray(*args)
 
 dark_fish_percentile = 3
 fish_blur_sigmas = 1
