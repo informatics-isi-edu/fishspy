@@ -13,6 +13,9 @@ from scipy.ndimage import gaussian_filter, maximum_filter1d, minimum_filter1d
 from PIL import Image, ImageDraw, ImageFont
 import re
 
+def toimage(*args):
+    return PIL.Image.fromarray(*args)
+
 dark_fish_percentile = 3
 fish_blur_sigmas = 1
 centroid_median_span = 2
