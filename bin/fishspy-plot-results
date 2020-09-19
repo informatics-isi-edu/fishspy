@@ -8,7 +8,7 @@ import math
 import numpy as np
 import scipy.ndimage as nd
 import scipy.ndimage.filters
-import png
+import PIL.Image
 import re
 
 pos_bin_cnt = 5
@@ -439,7 +439,7 @@ Effective environment flags:
         csv_filename = 'movie_sums.csv'
         json_filename = 'movie_grade.json'
 
-    png.from_array(img.astype(np.uint8), mode='RGB').save(png_filename2)
+    PIL.Image.fromarray(img.astype(np.uint8), mode='RGB').save(png_filename2)
 
     outf = open(csv_filename, 'w')
     writer = csv.writer(outf)

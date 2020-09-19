@@ -16,7 +16,7 @@ setup(
         "bin/fishspy-plot-cohort",
         "bin/fishspy_worker"
     ],
-    requires=["numpy", "scipy", "deriva"],
+    requires=["numpy", "scipy", "deriva", "PIL", "h5py"],
     install_requires=['deriva>=1.0'],
     maintainer_email="support@misd.isi.edu",
     license='(new) BSD',

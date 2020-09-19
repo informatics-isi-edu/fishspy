@@ -10,7 +10,6 @@ import numpy as np
 import h5py
 import scipy.ndimage as nd
 from scipy.ndimage import gaussian_filter, maximum_filter1d, minimum_filter1d
-from scipy.misc import toimage
 from PIL import Image, ImageDraw, ImageFont
 import re
 
@@ -254,7 +253,7 @@ def main(moviename):
             #f[avg_position,:,0] = 255
             #f[avg_position,:,1] = 0
             #f[avg_position,:,2] = 255
-            img = toimage(f)
+            img = Image.fromarray(f)
             draw = ImageDraw.Draw(img)
             tsec = t / frate
             tmin = int(tsec) / 60 % 60
@@ -276,7 +275,7 @@ def main(moviename):
             )
             draw.text((0, 100), note, (255,255,255), font=font)
         else:
-            img = toimage(f)
+            img = Image.fromarray(f)
         out_pipe.stdin.write(img.tobytes())
     
     # conditionally start debug movie output encoder
