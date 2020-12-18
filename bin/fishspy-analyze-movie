@@ -262,7 +262,7 @@ def main(moviename):
             tmin = int(tsec) / 60 % 60
             thour = int(tsec) / 60 / 60
             tsec = tsec % 60
-            draw.text((0, 0), "Time: %.2d:%.2d:%04.1f" % (thour, tmin, tsec), (255,255,255), font=font)
+            draw.text((0, 0), "Time: %.2d:%.2d:%06.3f" % (thour, tmin, tsec), (255,255,255), font=font)
             draw.text((0, 25), "Bright: %.3d" % brightness, (255,255,255), font=font)
             draw.text((0, 50), "Position: %.3d" % (avg_position,), (255,255,255), font=font)
             light_color = [
