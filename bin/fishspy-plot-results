@@ -245,8 +245,8 @@ Effective environment flags:
 
         trial_periods = np.zeros( (4,), dtype=np.int32 )
         for cs, us, off in CS_periods:
-            # HACK: assume valid US detection is at least 5 seconds * 20fps after CS detection
-            if (us - cs) <= (5*fps):
+            # HACK: assume valid US detection is at least 1.5 seconds * 20fps after CS detection
+            if (us - cs) <= (1.5*fps):
                 if trial_periods[2] == trial_periods[1]:
                     trial_periods[1:] += 1
                 else:
@@ -340,9 +340,9 @@ Effective environment flags:
         # draw CS period background
         img[period,0:-1,preroll:preroll + dL,:] = cs_bg_color
 
-        # HACK: assume valid US detection is at least 5 seconds * 20fps after CS detection
+        # HACK: assume valid US detection is at least 1.5 seconds * 20fps after CS detection
         cycle_type = 'CS'
-        if (CS_periods[period, 1] - CS_periods[period, 0]) > (5*fps):
+        if (CS_periods[period, 1] - CS_periods[period, 0]) > (1.5*fps):
             us_boundaries_detected += 1
             # show unconditioned stimulus marker too
             US_offset = CS_periods[period,1] - CS_periods[period,0]
