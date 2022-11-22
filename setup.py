@@ -1,6 +1,6 @@
 
 #
-# Copyright 2015 University of Southern California
+# Copyright 2015-2022 University of Southern California
 # Distributed under the (new) BSD License. See LICENSE.txt for more info.
 #
 
@@ -10,6 +10,7 @@ setup(
     name="fishspy",
     description="zebrafish video analysis",
     version="20200918.1",
+    packages=[],
     scripts=[
         "bin/fishspy-analyze-movie",
         "bin/fishspy-plot-results",
