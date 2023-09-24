@@ -291,7 +291,7 @@ def main(moviename):
 
     tmp_img1 = np.zeros(shape, dtype=np.uint8)
     tmp_img2 = np.zeros(shape, dtype=np.uint8)
-    tmp_img3 = np.zeros(shape, dtype=np.bool)
+    tmp_img3 = np.zeros(shape, dtype=bool)
 
     # process every input frame
     while t < nbframes:

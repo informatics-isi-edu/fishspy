@@ -176,7 +176,7 @@ Effective environment flags:
     print ("%d min/%d avg/%d max position spread" % (frame_bins.min(), frame_bins.mean(), frame_bins.max()))
 
     # zeros in input mean invalid measurements
-    invalid = np.zeros(frame_bins.shape, dtype=np.bool)
+    invalid = np.zeros(frame_bins.shape, dtype=bool)
 
     invalid = frame_bins == 0
     # invalid status contaminates next frame since we cannot compute differences w/ only one valid number
@@ -188,12 +188,12 @@ Effective environment flags:
         user_invalid.extend([ 0 for x in range(invalid.shape[1] - len(user_invalid)) ])
     elif len(user_invalid) > invalid.shape[1]:
         user_invalid = user_invalid[0:invalid.shape[1]]
-    user_invalid = np.array(user_invalid, dtype=np.bool)
+    user_invalid = np.array(user_invalid, dtype=bool)
     invalid += user_invalid
     user_invalid = user_invalid[None,:]
         
     # characterize statically invalid bins from aggregate TODO: other percentile threshold?
-    static_invalid = np.median(invalid[:,:], axis=0).astype(np.bool)[None,:] | user_invalid
+    static_invalid = np.median(invalid[:,:], axis=0).astype(bool)[None,:] | user_invalid
 
     # absolute interframe deltas, filling first frame with zeros
     frame_delta_bins = np.zeros(frame_bins.shape, dtype=np.float32)
